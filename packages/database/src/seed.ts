@@ -46,7 +46,7 @@ async function main() {
               firstName: faker.person.firstName(),
               lastName: faker.person.lastName(),
               phone: faker.phone.number(),
-              address: faker.location.streetAddress(true),
+              streetAddress: faker.location.streetAddress(true),
             },
           },
         },
@@ -68,13 +68,11 @@ async function main() {
               firstName: faker.person.firstName(),
               lastName: faker.person.lastName(),
               phone: faker.phone.number(),
-              address: faker.location.streetAddress(true),
+              streetAddress: faker.location.streetAddress(true),
               dateOfBirth: faker.date.birthdate({ min: 60, max: 90, mode: 'age' }),
-              emergencyContact: {
-                name: faker.person.fullName(),
-                phone: faker.phone.number(),
-                relationship: faker.helpers.arrayElement(['Spouse', 'Child', 'Sibling', 'Friend']),
-              },
+              emergencyContactName: faker.person.fullName(),
+              emergencyContactPhone: faker.phone.number(),
+              emergencyContactRelation: faker.helpers.arrayElement(['Spouse', 'Child', 'Sibling', 'Friend']),
             },
           },
         },
@@ -94,8 +92,6 @@ async function main() {
           'Ensure medication compliance',
           'Provide companionship',
           'Assist with daily activities',
-        ],
-        activities: [
           'Personal hygiene assistance',
           'Meal preparation',
           'Medication reminders',
@@ -103,7 +99,6 @@ async function main() {
           'Companionship',
         ],
         startDate: faker.date.past(),
-        isActive: true,
       },
     })
   }
@@ -120,16 +115,10 @@ async function main() {
           clientId: client.id,
           workerId: assignedWorker.id,
           scheduledAt,
-          completedAt: faker.date.soon({ days: 1, refDate: scheduledAt }),
+          actualEndAt: faker.date.soon({ days: 1, refDate: scheduledAt }),
           duration: faker.number.int({ min: 60, max: 240 }),
           status: VisitStatus.COMPLETED,
           notes: faker.lorem.sentence(),
-          activities: [
-            'Assisted with personal care',
-            'Prepared meals',
-            'Administered medications',
-            'Provided companionship',
-          ],
         },
       })
     }
@@ -142,7 +131,6 @@ async function main() {
           workerId: assignedWorker.id,
           scheduledAt: faker.date.soon({ days: 30 }),
           status: VisitStatus.SCHEDULED,
-          activities: [],
         },
       })
     }
@@ -157,15 +145,11 @@ async function main() {
     await prisma.budget.create({
       data: {
         clientId: client.id,
-        total: faker.number.float({ min: 1000, max: 5000, precision: 0.01 }),
-        spent: faker.number.float({ min: 0, max: 2000, precision: 0.01 }),
-        period: currentMonth,
-        allocations: {
-          care: faker.number.float({ min: 500, max: 2000, precision: 0.01 }),
-          supplies: faker.number.float({ min: 100, max: 500, precision: 0.01 }),
-          transport: faker.number.float({ min: 50, max: 200, precision: 0.01 }),
-          other: faker.number.float({ min: 0, max: 300, precision: 0.01 }),
-        },
+        name: `${faker.date.month({ abbreviated: false })} ${currentMonth.getFullYear()} Budget`,
+        totalAllocated: faker.number.float({ min: 1000, max: 5000, precision: 0.01 }),
+        totalSpent: faker.number.float({ min: 0, max: 2000, precision: 0.01 }),
+        periodStart: currentMonth,
+        periodEnd: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0),
       },
     })
   }

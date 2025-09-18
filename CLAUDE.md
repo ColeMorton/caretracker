@@ -126,10 +126,16 @@ abstract model AuditableEntity {
   id String @id
 }
 
-# ✅ VALID: Direct field definitions
-model User {
-  id String @id @default(cuid())
-  createdAt DateTime @default(now())
+# ❌ CRITICAL: Custom output paths break module resolution
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"  # Breaks @prisma/client imports!
+}
+
+# ✅ VALID: Use default Prisma client location
+generator client {
+  provider = "prisma-client-js"
+  # No custom output - uses node_modules/@prisma/client
 }
 
 # Always regenerate client after schema changes
