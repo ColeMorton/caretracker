@@ -66,7 +66,7 @@ export default defineConfig({
       command: process.env.CI 
         ? 'pnpm --filter @caretracker/api dev:ci'
         : 'pnpm --filter @caretracker/api dev',
-      port: 4000,
+      url: 'http://localhost:4000/health',
       reuseExistingServer: true,
       timeout: 120000,
       env: {
@@ -76,6 +76,7 @@ export default defineConfig({
         JWT_SECRET: process.env.JWT_SECRET || 'ci-test-secret-key-for-testing-only',
         HOST: '0.0.0.0',
         LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+        CI: process.env.CI || 'false',
       },
     },
   ],
