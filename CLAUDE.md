@@ -136,6 +136,33 @@ model User {
 pnpm database:generate
 ```
 
+#### GitHub Actions CI Requirements
+```yaml
+# ❌ MISSING: Prisma generation step in lint-and-typecheck job
+- name: Run TypeScript check
+  run: pnpm typecheck
+
+# ✅ REQUIRED: Generate Prisma client before typecheck
+- name: Install dependencies
+  run: pnpm install --frozen-lockfile
+
+- name: Generate Prisma client
+  run: pnpm database:generate
+
+- name: Run TypeScript check
+  run: pnpm typecheck
+```
+
+#### Faker.js with TypeScript Strict Mode
+```typescript
+// ❌ FORBIDDEN: Returns unknown type
+const worker = faker.helpers.arrayElement(workers)
+
+// ✅ REQUIRED: Type assertion with verbatimModuleSyntax
+import type { User } from '@prisma/client'
+const worker = faker.helpers.arrayElement(workers) as User
+```
+
 #### Type Safety Enforcement
 - `exactOptionalPropertyTypes: true` - No undefined assignments to optional properties
 - `noUncheckedIndexedAccess: true` - Index access returns potentially undefined values

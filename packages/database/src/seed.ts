@@ -1,4 +1,5 @@
 import { PrismaClient, Role, VisitStatus } from '@prisma/client'
+import type { User } from '@prisma/client'
 import { faker } from '@faker-js/faker'
 import bcrypt from 'bcryptjs'
 
@@ -109,7 +110,7 @@ async function main() {
 
   // Create visits
   for (const client of clients) {
-    const assignedWorker = faker.helpers.arrayElement(workers)
+    const assignedWorker = faker.helpers.arrayElement(workers) as User
     
     // Past visits
     for (let i = 0; i < 10; i++) {
