@@ -14,36 +14,53 @@ import env from '@fastify/env'
 import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
 
-const envSchema = {
+// Create environment-specific schemas
+const ciEnvSchema = {
   type: 'object',
-  required: process.env.CI === 'true' ? [] : ['DATABASE_URL'],
+  required: [],
   properties: {
     DATABASE_URL: { 
       type: 'string',
-      default: process.env.CI === 'true' 
-        ? 'postgresql://test:test@localhost:5432/caretracker_test'
-        : undefined
+      default: 'postgresql://test:test@localhost:5432/caretracker_test'
     },
     JWT_SECRET: { 
       type: 'string', 
-      default: process.env.CI === 'true' 
-        ? 'ci-test-secret-key-for-testing-only'
-        : 'your-secret-key' 
+      default: 'ci-test-secret-key-for-testing-only'
     },
+    PORT: { type: 'number', default: 4000 },
+    HOST: { type: 'string', default: '0.0.0.0' },
+    NODE_ENV: { type: 'string', default: 'test' },
+    LOG_LEVEL: { type: 'string', default: 'info' },
+  },
+} as const
+
+const devEnvSchema = {
+  type: 'object',
+  required: ['DATABASE_URL'],
+  properties: {
+    DATABASE_URL: { type: 'string' },
+    JWT_SECRET: { type: 'string', default: 'your-secret-key' },
     PORT: { type: 'number', default: 4000 },
     HOST: { type: 'string', default: '0.0.0.0' },
     NODE_ENV: { type: 'string', default: 'development' },
     LOG_LEVEL: { type: 'string', default: 'info' },
   },
-}
+} as const
 
 export const app: FastifyPluginAsync = async (fastify, opts) => {
   // Environment variables with CI-friendly configuration
-  await fastify.register(env, {
-    schema: envSchema,
-    dotenv: process.env.CI !== 'true', // Skip dotenv in CI environment
-    data: process.env.CI === 'true' ? process.env : undefined, // Use process.env directly in CI
-  })
+  const envConfig = process.env.CI === 'true'
+    ? {
+        schema: ciEnvSchema,
+        dotenv: false,
+        data: process.env,
+      }
+    : {
+        schema: devEnvSchema,
+        dotenv: true,
+      }
+
+  await fastify.register(env, envConfig)
 
   // Security plugins
   await fastify.register(helmet, {
