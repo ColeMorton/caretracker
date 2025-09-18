@@ -1,5 +1,4 @@
 import type { ApiResponse, UserProfile } from '@caretracker/shared'
-
 import { type FastifyPluginAsync } from 'fastify'
 
 const auth: FastifyPluginAsync = async (fastify, _opts) => {

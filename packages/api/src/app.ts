@@ -1,8 +1,6 @@
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { dirname } from 'path'
 
-import { type FastifyPluginAsync } from 'fastify'
 import AutoLoad from '@fastify/autoload'
 import cors from '@fastify/cors'
 import env from '@fastify/env'
@@ -11,6 +9,7 @@ import rateLimit from '@fastify/rate-limit'
 import sensible from '@fastify/sensible'
 import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
+import { type FastifyPluginAsync } from 'fastify'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)

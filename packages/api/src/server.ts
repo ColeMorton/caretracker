@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+
 import { app } from './app'
 
 const server = Fastify({
@@ -14,13 +15,13 @@ const server = Fastify({
 
 server.register(app)
 
-const start = async () => {
+const start = async (): Promise<void> => {
   try {
     const port = Number(process.env['PORT']) || 3001
     const host = process.env['HOST'] || '0.0.0.0'
     
     await server.listen({ port, host })
-    console.log(`🚀 Server listening at http://${host}:${port}`)
+    server.log.info(`🚀 Server listening at http://${host}:${port}`)
   } catch (err) {
     server.log.error(err)
     process.exit(1)

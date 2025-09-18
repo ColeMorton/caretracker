@@ -1,5 +1,4 @@
 import type { ApiResponse, PaginatedResponse, ApiVisit } from '@caretracker/shared'
-
 import { type FastifyPluginAsync } from 'fastify'
 
 const visits: FastifyPluginAsync = async (fastify, _opts) => {
