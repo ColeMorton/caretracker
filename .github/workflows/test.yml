@@ -60,6 +60,7 @@ jobs:
 
       - name: Run unit tests
         run: pnpm test:unit
+        timeout-minutes: 10
 
       - name: Upload unit test coverage
         uses: codecov/codecov-action@v4
@@ -123,6 +124,7 @@ jobs:
 
       - name: Run integration tests
         run: pnpm test:integration
+        timeout-minutes: 15
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/caretracker_test
           REDIS_URL: redis://localhost:6379
@@ -138,6 +140,7 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]  # Wait for other tests to complete
 
     services:
       postgres:
@@ -201,10 +204,12 @@ jobs:
 
       - name: Run E2E tests
         run: pnpm test:e2e
+        timeout-minutes: 20
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/caretracker_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
+          CI: true
 
       - name: Upload E2E test results
         uses: actions/upload-artifact@v4
@@ -217,7 +222,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [unit-tests]  # TODO: Re-add lint-and-typecheck when ESLint is fixed
+    needs: [unit-tests, integration-tests]  # TODO: Re-add lint-and-typecheck when ESLint is fixed
 
     steps:
       - name: Checkout

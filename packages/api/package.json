@@ -11,11 +11,11 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
-    "test": "vitest run",
-    "test:unit": "vitest run --reporter=verbose",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test": "NODE_OPTIONS=\"--import tsx/esm\" vitest run",
+    "test:unit": "NODE_OPTIONS=\"--import tsx/esm\" vitest run --reporter=verbose",
+    "test:integration": "NODE_OPTIONS=\"--import tsx/esm\" vitest run --config vitest.integration.config.ts",
+    "test:watch": "NODE_OPTIONS=\"--import tsx/esm\" vitest",
+    "test:coverage": "NODE_OPTIONS=\"--import tsx/esm\" vitest run --coverage"
   },
   "dependencies": {
     "@fastify/autoload": "^5.8.0",

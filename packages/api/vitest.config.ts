@@ -22,7 +22,11 @@ export default defineConfig({
     pool: 'forks',
   },
   esbuild: {
-    target: 'node18'
+    target: 'node18',
+    format: 'esm',
+  },
+  optimizeDeps: {
+    include: ['fastify', '@fastify/autoload'],
   },
   resolve: {
     alias: {

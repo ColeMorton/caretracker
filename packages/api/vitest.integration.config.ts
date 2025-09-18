@@ -21,7 +21,11 @@ export default defineConfig({
     },
   },
   esbuild: {
-    target: 'node18'
+    target: 'node18',
+    format: 'esm',
+  },
+  optimizeDeps: {
+    include: ['fastify', '@fastify/autoload'],
   },
   resolve: {
     alias: {
