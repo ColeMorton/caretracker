@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.next
+coverage
+*.d.ts
+packages/database/generated
+.turbo

@@ -49,7 +49,7 @@ const devEnvSchema = {
 
 export const app: FastifyPluginAsync = async (fastify, opts) => {
   // Environment variables with CI-friendly configuration
-  const envConfig = process.env.CI === 'true'
+  const envConfig = process.env['CI'] === 'true'
     ? {
         schema: ciEnvSchema,
         dotenv: false,
@@ -64,11 +64,11 @@ export const app: FastifyPluginAsync = async (fastify, opts) => {
 
   // Security plugins
   await fastify.register(helmet, {
-    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    contentSecurityPolicy: process.env['NODE_ENV'] === 'production',
   })
 
   await fastify.register(cors, {
-    origin: process.env.NODE_ENV === 'production' 
+    origin: process.env['NODE_ENV'] === 'production'
       ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002']
       : true,
     credentials: true,

@@ -55,25 +55,7 @@ enum CarePlanStatus {
   DISCONTINUED // No longer needed
 }
 
-// Base model for all healthcare entities requiring audit trails
-abstract model AuditableEntity {
-  id                String      @id @default(cuid())
-
-  // 2025 Standard: Complete audit trail for HIPAA compliance
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  createdBy         String?     // User ID who created this record
-  updatedBy         String?     // User ID who last updated this record
-  deletedAt         DateTime?   // Soft delete timestamp for healthcare compliance
-
-  // 2025 Standard: Optimistic concurrency control
-  version           Int         @default(1)
-
-  // 2025 Standard: Data classification for compliance
-  dataClassification DataClassification @default(INTERNAL)
-
-  @@map("_auditable_entity")
-}
+// Note: Prisma doesn't support abstract models. Audit fields should be added directly to models that need them.
 
 model User {
   id                String               @id @default(cuid())

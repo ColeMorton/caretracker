@@ -104,6 +104,43 @@ pnpm --filter @caretracker/api lint
 pnpm lint --fix
 ```
 
+### TypeScript 2025 Strict Mode Patterns
+
+#### Environment Variable Access
+Due to `noPropertyAccessFromIndexSignature: true`, use bracket notation:
+
+```typescript
+// ❌ FORBIDDEN: Dot notation
+process.env.NODE_ENV
+process.env.CI
+
+// ✅ REQUIRED: Bracket notation
+process.env['NODE_ENV']
+process.env['CI']
+```
+
+#### Prisma Schema Rules
+```bash
+# ❌ INVALID: Abstract models not supported
+abstract model AuditableEntity {
+  id String @id
+}
+
+# ✅ VALID: Direct field definitions
+model User {
+  id String @id @default(cuid())
+  createdAt DateTime @default(now())
+}
+
+# Always regenerate client after schema changes
+pnpm database:generate
+```
+
+#### Type Safety Enforcement
+- `exactOptionalPropertyTypes: true` - No undefined assignments to optional properties
+- `noUncheckedIndexedAccess: true` - Index access returns potentially undefined values
+- `noPropertyAccessFromIndexSignature: true` - Use bracket notation for index signatures
+
 ### Troubleshooting Common Issues
 
 #### Lockfile Drift (CI Failure)
