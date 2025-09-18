@@ -21,11 +21,14 @@ test.describe('API Endpoints', () => {
   test('should serve API documentation', async ({ page }) => {
     await page.goto(`${apiBaseUrl}/docs`)
     
-    // Check that Swagger UI loads
-    await expect(page.locator('.swagger-ui')).toBeVisible()
+    // Wait for Swagger UI to fully load by checking for specific content
+    await expect(page.getByText('CareTracker API')).toBeVisible()
     
-    // Check for API title
-    await expect(page.locator('text=CareTracker API')).toBeVisible()
+    // Check for API description
+    await expect(page.getByText('Healthcare Management System API')).toBeVisible()
+    
+    // Verify at least one endpoint group is visible
+    await expect(page.getByText('auth', { exact: true })).toBeVisible()
   })
 
   test('should handle authentication endpoint', async ({ request }) => {
