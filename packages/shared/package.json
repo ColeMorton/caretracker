@@ -17,6 +17,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@caretracker/eslint-config": "workspace:^",
     "@caretracker/typescript-config": "workspace:*",
     "@types/node": "^20.11.0",
     "@vitest/coverage-v8": "^1.2.2",
