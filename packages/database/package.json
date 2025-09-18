@@ -6,12 +6,13 @@
   "types": "./src/index.ts",
   "scripts": {
     "generate": "prisma generate",
+    "database:generate": "prisma generate",
     "push": "prisma db push",
     "migrate": "prisma migrate dev",
     "migrate:prod": "prisma migrate deploy",
     "seed": "tsx src/seed.ts",
     "studio": "prisma studio",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "prisma generate && tsc --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^5.8.1",

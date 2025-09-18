@@ -136,13 +136,25 @@ model User {
 pnpm database:generate
 ```
 
+#### Turbo Pipeline Dependencies (Critical for CI)
+```json
+// ❌ MISSING: No database generation dependency
+"typecheck": {
+  "dependsOn": ["^build"]
+}
+
+// ✅ REQUIRED: Proper Turbo pipeline dependencies
+"typecheck": {
+  "dependsOn": ["^build", "database:generate"]
+},
+"database:generate": {
+  "outputs": ["packages/database/generated/**"]
+}
+```
+
 #### GitHub Actions CI Requirements
 ```yaml
-# ❌ MISSING: Prisma generation step in lint-and-typecheck job
-- name: Run TypeScript check
-  run: pnpm typecheck
-
-# ✅ REQUIRED: Generate Prisma client before typecheck
+# ✅ With proper Turbo dependencies, GitHub Actions work correctly
 - name: Install dependencies
   run: pnpm install --frozen-lockfile
 
@@ -150,7 +162,23 @@ pnpm database:generate
   run: pnpm database:generate
 
 - name: Run TypeScript check
-  run: pnpm typecheck
+  run: pnpm typecheck  # Now respects Turbo dependencies
+```
+
+#### Database Package Script Requirements
+```json
+// ❌ MISSING: No database:generate script for Turbo
+"scripts": {
+  "generate": "prisma generate",
+  "typecheck": "tsc --noEmit"
+}
+
+// ✅ REQUIRED: Complete script setup with fallback safety
+"scripts": {
+  "generate": "prisma generate",
+  "database:generate": "prisma generate",
+  "typecheck": "prisma generate && tsc --noEmit"
+}
 ```
 
 #### Faker.js with TypeScript Strict Mode
