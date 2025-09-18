@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@caretracker/database": "workspace:*",
+    "@caretracker/eslint-config": "workspace:^",
     "@caretracker/shared": "workspace:*",
     "@caretracker/typescript-config": "workspace:*",
     "@testcontainers/postgresql": "^11.6.0",
