@@ -1,0 +1,332 @@
+import { FastifyPluginAsync, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify'
+import fp from 'fastify-plugin'
+import jwt from '@fastify/jwt'
+import { AuthService, JWTPayload } from '../services/auth.service.js'
+import { AuthenticationError, AuthorizationError } from '../utils/errors.js'
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    authService: AuthService
+    authenticate: preHandlerHookHandler
+    requirePermission: (permission: string) => preHandlerHookHandler
+    requireRole: (...roles: string[]) => preHandlerHookHandler
+    requireOwnership: (resourceParam?: string) => preHandlerHookHandler
+  }
+
+  interface FastifyRequest {
+    user?: {
+      readonly id: string
+      readonly email: string
+      readonly role: string
+      readonly permissions: readonly string[]
+      readonly sessionId: string
+    }
+  }
+}
+
+const authPlugin: FastifyPluginAsync = async (fastify) => {
+  // Register JWT plugin
+  await fastify.register(jwt, {
+    secret: process.env['JWT_SECRET'] || 'fallback-secret-for-development',
+    sign: {
+      algorithm: 'HS256',
+      issuer: 'caretracker-api',
+      audience: 'caretracker-clients'
+    },
+    verify: {
+      algorithms: ['HS256'],
+      issuer: 'caretracker-api',
+      audience: 'caretracker-clients'
+    }
+  })
+
+  // Create AuthService instance
+  const authService = new AuthService(fastify, fastify.prisma)
+  fastify.decorate('authService', authService)
+
+  // Authentication hook - verifies JWT token
+  const authenticate: preHandlerHookHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authHeader = request.headers.authorization
+
+      if (!authHeader) {
+        throw new AuthenticationError('Authorization header is required')
+      }
+
+      const [scheme, token] = authHeader.split(' ')
+
+      if (scheme !== 'Bearer' || !token) {
+        throw new AuthenticationError('Invalid authorization header format. Use: Bearer <token>')
+      }
+
+      // Validate the token using AuthService
+      const payload = await authService.validateAccessToken(token)
+
+      // Attach user info to request
+      request.user = {
+        id: payload.userId,
+        email: payload.email,
+        role: payload.role,
+        permissions: payload.permissions,
+        sessionId: payload.sessionId
+      }
+
+      // Log access for audit trail
+      fastify.log.info({
+        userId: payload.userId,
+        email: payload.email,
+        role: payload.role,
+        sessionId: payload.sessionId,
+        url: request.url,
+        method: request.method,
+        userAgent: request.headers['user-agent'],
+        ip: request.ip
+      }, 'Authenticated request')
+
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        throw error
+      }
+      throw new AuthenticationError('Token validation failed')
+    }
+  }
+
+  // Permission-based authorization hook
+  const requirePermission = (permission: string): preHandlerHookHandler => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!request.user) {
+        throw new AuthenticationError('Authentication required')
+      }
+
+      const hasPermission = await authService.checkPermission(request.user.id, permission)
+
+      if (!hasPermission) {
+        // Log unauthorized access attempt
+        fastify.log.warn({
+          userId: request.user.id,
+          role: request.user.role,
+          requiredPermission: permission,
+          url: request.url,
+          method: request.method,
+          ip: request.ip
+        }, 'Unauthorized access attempt')
+
+        throw new AuthorizationError(`Insufficient permissions. Required: ${permission}`)
+      }
+
+      // Log successful authorization
+      fastify.log.debug({
+        userId: request.user.id,
+        permission,
+        url: request.url
+      }, 'Permission check passed')
+    }
+  }
+
+  // Role-based authorization hook
+  const requireRole = (...allowedRoles: string[]): preHandlerHookHandler => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!request.user) {
+        throw new AuthenticationError('Authentication required')
+      }
+
+      if (!allowedRoles.includes(request.user.role)) {
+        // Log unauthorized access attempt
+        fastify.log.warn({
+          userId: request.user.id,
+          userRole: request.user.role,
+          allowedRoles,
+          url: request.url,
+          method: request.method,
+          ip: request.ip
+        }, 'Role-based access denied')
+
+        throw new AuthorizationError(`Access denied. Required roles: ${allowedRoles.join(', ')}`)
+      }
+
+      fastify.log.debug({
+        userId: request.user.id,
+        role: request.user.role,
+        url: request.url
+      }, 'Role check passed')
+    }
+  }
+
+  // Ownership-based authorization (user can only access their own resources)
+  const requireOwnership = (resourceParam: string = 'id'): preHandlerHookHandler => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!request.user) {
+        throw new AuthenticationError('Authentication required')
+      }
+
+      // Admin and Supervisor roles can access all resources
+      if (['ADMIN', 'SUPERVISOR'].includes(request.user.role)) {
+        return
+      }
+
+      const params = request.params as Record<string, string>
+      const resourceId = params[resourceParam]
+
+      if (!resourceId) {
+        throw new AuthenticationError(`Resource parameter '${resourceParam}' is required`)
+      }
+
+      // For most cases, resource ID should match user ID for ownership
+      // For more complex ownership checks, this would need to query the database
+      if (resourceId !== request.user.id) {
+        // Check if this is a client trying to access their own resources
+        if (request.user.role === 'CLIENT') {
+          // Here you might need to check the database to verify ownership
+          // For now, we'll allow if the route is designed for client access
+          const isClientRoute = request.url.includes('/visits') || request.url.includes('/budgets')
+          if (!isClientRoute || !await verifyClientOwnership(request.user.id, resourceId, request.url)) {
+            throw new AuthorizationError('You can only access your own resources')
+          }
+        } else if (request.user.role === 'WORKER') {
+          // Workers can access resources they're assigned to
+          if (!await verifyWorkerAssignment(request.user.id, resourceId, request.url)) {
+            throw new AuthorizationError('You can only access assigned resources')
+          }
+        } else {
+          throw new AuthorizationError('You can only access your own resources')
+        }
+      }
+
+      fastify.log.debug({
+        userId: request.user.id,
+        resourceId,
+        url: request.url
+      }, 'Ownership check passed')
+    }
+  }
+
+  // Helper method to verify client ownership
+  const verifyClientOwnership = async (userId: string, resourceId: string, url: string): Promise<boolean> => {
+    try {
+      if (url.includes('/visits')) {
+        const visit = await fastify.prisma.visit.findUnique({
+          where: { id: resourceId },
+          select: { clientId: true }
+        })
+        return visit?.clientId === userId
+      }
+
+      if (url.includes('/budgets')) {
+        const budget = await fastify.prisma.budget.findUnique({
+          where: { id: resourceId },
+          select: { clientId: true }
+        })
+        return budget?.clientId === userId
+      }
+
+      if (url.includes('/careplans')) {
+        const carePlan = await fastify.prisma.carePlan.findUnique({
+          where: { id: resourceId },
+          select: { clientId: true }
+        })
+        return carePlan?.clientId === userId
+      }
+
+      return false
+    } catch (error) {
+      fastify.log.error(error, 'Error verifying client ownership')
+      return false
+    }
+  }
+
+  // Helper method to verify worker assignment
+  const verifyWorkerAssignment = async (userId: string, resourceId: string, url: string): Promise<boolean> => {
+    try {
+      if (url.includes('/visits')) {
+        const visit = await fastify.prisma.visit.findUnique({
+          where: { id: resourceId },
+          select: { workerId: true }
+        })
+        return visit?.workerId === userId
+      }
+
+      if (url.includes('/clients')) {
+        // Check if worker is assigned to any visits for this client
+        const visitExists = await fastify.prisma.visit.findFirst({
+          where: {
+            clientId: resourceId,
+            workerId: userId
+          },
+          select: { id: true }
+        })
+        return !!visitExists
+      }
+
+      return false
+    } catch (error) {
+      fastify.log.error(error, 'Error verifying worker assignment')
+      return false
+    }
+  }
+
+  // Decorate fastify instance with auth methods
+  fastify.decorate('authenticate', authenticate)
+  fastify.decorate('requirePermission', requirePermission)
+  fastify.decorate('requireRole', requireRole)
+  fastify.decorate('requireOwnership', requireOwnership)
+
+  // Optional authentication hook (doesn't throw if no token)
+  fastify.decorate('optionalAuth', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await authenticate(request, reply)
+    } catch (error) {
+      // Silently continue without user context
+      fastify.log.debug('Optional authentication failed - continuing without user context')
+    }
+  })
+
+  // Helper method to check if current user has permission
+  fastify.decorate('hasPermission', (request: FastifyRequest, permission: string): boolean => {
+    if (!request.user) return false
+    return request.user.permissions.includes('*') || request.user.permissions.includes(permission)
+  })
+
+  // Helper method to check if current user has role
+  fastify.decorate('hasRole', (request: FastifyRequest, ...roles: string[]): boolean => {
+    if (!request.user) return false
+    return roles.includes(request.user.role)
+  })
+
+  // Add JWT schemas for OpenAPI documentation
+  fastify.addSchema({
+    $id: 'TokenResponse',
+    type: 'object',
+    properties: {
+      accessToken: { type: 'string' },
+      refreshToken: { type: 'string' },
+      expiresIn: { type: 'number' }
+    },
+    required: ['accessToken', 'refreshToken', 'expiresIn'],
+    additionalProperties: false
+  })
+
+  fastify.addSchema({
+    $id: 'UserProfile',
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      email: { type: 'string' },
+      role: { type: 'string' },
+      profile: {
+        type: 'object',
+        properties: {
+          firstName: { type: 'string' },
+          lastName: { type: 'string' },
+          phone: { type: 'string' }
+        }
+      }
+    },
+    required: ['id', 'email', 'role'],
+    additionalProperties: false
+  })
+}
+
+export default fp(authPlugin, {
+  name: 'auth',
+  dependencies: ['database']
+})

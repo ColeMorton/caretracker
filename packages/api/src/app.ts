@@ -36,10 +36,10 @@ const ciEnvSchema = {
 
 const devEnvSchema = {
   type: 'object',
-  required: ['DATABASE_URL'],
+  required: ['DATABASE_URL', 'JWT_SECRET'],
   properties: {
     DATABASE_URL: { type: 'string' },
-    JWT_SECRET: { type: 'string', default: 'your-secret-key' },
+    JWT_SECRET: { type: 'string' },
     PORT: { type: 'number', default: 4000 },
     HOST: { type: 'string', default: '0.0.0.0' },
     NODE_ENV: { type: 'string', default: 'development' },
@@ -117,6 +117,17 @@ export const app: FastifyPluginAsync = async (fastify, opts) => {
     options: Object.assign({}, opts),
   })
 
-  // Health check
-  fastify.get('/health', async () => ({ status: 'ok' }))
+  // Health check with database status
+  fastify.get('/health', async () => {
+    const dbHealth = await fastify.checkDatabaseHealth()
+
+    return {
+      status: dbHealth.status === 'healthy' ? 'ok' : 'degraded',
+      timestamp: new Date().toISOString(),
+      version: '0.1.0',
+      checks: {
+        database: dbHealth
+      }
+    }
+  })
 }
