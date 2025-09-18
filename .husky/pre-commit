@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-commit lockfile validation
+echo "🔍 Validating pnpm lockfile..."
+
+# Check if lockfile is up to date
+if ! pnpm install --frozen-lockfile --prefer-offline 2>/dev/null; then
+  echo "❌ pnpm-lock.yaml is out of sync with package.json files!"
+  echo "💡 Run pnpm install to update the lockfile, then commit again."
+  exit 1
+fi
+
+echo "✅ Lockfile validation passed"
+
+# Run lint-staged for code quality
+npx lint-staged

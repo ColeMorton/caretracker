@@ -28,6 +28,17 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
+      - name: Validate lockfile synchronization
+        run: |
+          echo "🔍 Validating pnpm lockfile synchronization..."
+          if ! pnpm install --frozen-lockfile --prefer-offline; then
+            echo "❌ pnpm-lock.yaml is out of sync with package.json files!"
+            echo "💡 This indicates that dependencies were changed without regenerating the lockfile."
+            echo "🔧 To fix: run 'pnpm install' locally and commit the updated lockfile."
+            exit 1
+          fi
+          echo "✅ Lockfile validation passed - all dependencies are synchronized"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

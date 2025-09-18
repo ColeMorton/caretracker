@@ -9,6 +9,7 @@ CareTracker is a comprehensive healthcare management system demonstrating modern
 ## Development Commands
 
 ### Initial Setup
+
 ```bash
 # Install dependencies with pnpm (preferred for monorepo)
 pnpm install
@@ -27,6 +28,7 @@ pnpm database:seed
 ```
 
 ### Development
+
 ```bash
 # Start all apps in development mode
 pnpm dev
@@ -54,7 +56,82 @@ pnpm test                          # Run tests
 pnpm test:e2e                      # Run E2E tests
 ```
 
+## Dependency Management & DevOps
+
+### Lockfile Management (Critical for CI)
+
+```bash
+# When adding/removing dependencies
+pnpm install                       # Regenerates pnpm-lock.yaml
+
+# In CI/production environments
+pnpm install --frozen-lockfile     # Ensures exact dependency versions
+
+# If lockfile is out of sync (common error)
+pnpm install                       # Fix: regenerate lockfile
+git add pnpm-lock.yaml             # Commit the updated lockfile
+```
+
+### Pre-commit Hooks (Automatic Quality Checks)
+
+```bash
+# Pre-commit hooks run automatically on every commit:
+# 1. 🔍 Lockfile validation (prevents CI failures)
+# 2. 🎨 ESLint with auto-fix
+# 3. 📝 Prettier formatting
+# 4. 🏥 Healthcare-specific code rules
+
+# Manual trigger (for testing)
+.husky/pre-commit
+
+# Skip hooks (emergency only)
+git commit --no-verify
+```
+
+### ESLint Healthcare Rules (2025 Standards)
+
+```bash
+# ESLint enforces healthcare-specific patterns:
+# - Readonly types for medical data safety
+# - Security rules for PII/PHI protection
+# - Functional programming patterns
+# - Import organization and type safety
+
+# Check specific package
+pnpm --filter @caretracker/api lint
+
+# Auto-fix issues
+pnpm lint --fix
+```
+
+### Troubleshooting Common Issues
+
+#### Lockfile Drift (CI Failure)
+
+```
+Error: ERR_PNPM_OUTDATED_LOCKFILE
+```
+
+**Solution**: Run `pnpm install` and commit the updated lockfile.
+
+#### ESLint Configuration Issues
+
+```
+Error: ESLint couldn't find config
+```
+
+**Solution**: Dependencies changed - run `pnpm install` to update lockfile.
+
+#### TypeScript Module Resolution
+
+```
+Error: verbatimModuleSyntax conflicts
+```
+
+**Solution**: Use ESNext modules in tsconfig.json for packages.
+
 ### Building & Deployment
+
 ```bash
 # Build all apps
 pnpm build
@@ -75,6 +152,7 @@ docker-compose down                               # Stop services
 ## Architecture & Key Patterns
 
 ### Monorepo Structure
+
 - **apps/**: Next.js 14 applications (web, mobile-web, admin)
 - **packages/api**: Fastify backend with TypeScript
 - **packages/database**: Prisma schemas and migrations
@@ -82,6 +160,7 @@ docker-compose down                               # Stop services
 - **packages/ui**: Shared UI components library
 
 ### Technology Stack
+
 - **Frontend**: Next.js 14 App Router, React Server Components, TypeScript, Tailwind CSS, shadcn/ui
 - **Backend**: Fastify, TypeScript, JWT auth with refresh tokens
 - **Database**: PostgreSQL with Prisma ORM
@@ -100,18 +179,21 @@ docker-compose down                               # Stop services
 7. **Security**: Rate limiting, CORS, CSP headers, input validation with Zod
 
 ### Database Schema Key Entities
+
 - **User**: Authentication and profile data
 - **Visit**: Care visit scheduling and tracking
 - **Budget**: Financial tracking per client
 - **CarePlan**: Care planning and documentation
 
 ### Performance Considerations
+
 - Use React Server Components for initial page loads
 - Implement proper caching strategies with Redis
 - Optimize database queries with proper indexes
 - Use connection pooling for PostgreSQL
 
 ### MacBook Pro M1 Deployment
+
 - All services run in Docker containers optimized for ARM64
 - PostgreSQL and Redis run locally with no storage limits
 - Public access via Cloudflare Tunnel (free tier)
@@ -120,6 +202,7 @@ docker-compose down                               # Stop services
 ## Phase 1 Implementation Status
 
 ### ✅ Completed Features
+
 - Monorepo setup with Turborepo and PNPM workspaces
 - TypeScript strict mode configuration across all packages
 - Three Next.js 14 applications with App Router
@@ -130,6 +213,7 @@ docker-compose down                               # Stop services
 - Basic API endpoints with mock data for testing
 
 ### 🏃 Current State
+
 - All development infrastructure is fully configured
 - Basic Hello World endpoints are working
 - Database schema is designed and ready
@@ -137,6 +221,7 @@ docker-compose down                               # Stop services
 - Applications can be started and run independently
 
 ### 📍 API Endpoints Available
+
 - `GET /` - API welcome message
 - `GET /health` - Health check endpoint
 - `POST /auth/login` - Demo authentication (email: demo@caretracker.com, password: demo123)
@@ -148,8 +233,9 @@ docker-compose down                               # Stop services
 - `GET /docs` - Interactive API documentation
 
 ### 🔗 Application URLs
+
 - Web Portal: http://localhost:3000
-- Mobile Web (PWA): http://localhost:3001  
+- Mobile Web (PWA): http://localhost:3001
 - Admin Dashboard: http://localhost:3002
 - API Server: http://localhost:3001
 - API Documentation: http://localhost:3001/docs
