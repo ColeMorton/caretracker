@@ -1,9 +1,12 @@
 {
-  "extends": "@caretracker/typescript-config/tsconfig.node.json",
+  "extends": "@caretracker/typescript-config/tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

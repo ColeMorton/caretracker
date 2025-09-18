@@ -40,11 +40,10 @@
     "sourceMap": true,
     "removeComments": false,
 
-    // Path mapping
+    // Path mapping (simplified for compatibility)
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@caretracker/*": ["../../packages/*/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "exclude": [
