@@ -10,7 +10,7 @@ export interface PaginationParams {
   readonly limit: number
 }
 
-export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+export interface PaginatedResponse<T> extends ApiResponse<readonly T[]> {
   readonly meta: {
     readonly page: number
     readonly limit: number

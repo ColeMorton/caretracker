@@ -6,13 +6,14 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'CareTracker - Healthcare Management System',
-  description: 'Comprehensive healthcare management for clients and care workers',
+  description:
+    'Comprehensive healthcare management for clients and care workers',
 }
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  readonly children: React.ReactNode
 }) {
   return (
     <html lang="en">
