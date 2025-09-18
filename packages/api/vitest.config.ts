@@ -19,6 +19,10 @@ export default defineConfig({
       ],
     },
     testTimeout: 10000,
+    pool: 'forks',
+  },
+  esbuild: {
+    target: 'node18'
   },
   resolve: {
     alias: {

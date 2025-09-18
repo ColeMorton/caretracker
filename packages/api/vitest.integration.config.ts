@@ -9,6 +9,7 @@ export default defineConfig({
     include: ['tests/integration/**/*.test.ts'],
     testTimeout: 30000, // Longer timeout for integration tests
     hookTimeout: 30000,
+    pool: 'forks',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -18,6 +19,9 @@ export default defineConfig({
         '**/tests/**',
       ],
     },
+  },
+  esbuild: {
+    target: 'node18'
   },
   resolve: {
     alias: {

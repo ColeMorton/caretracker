@@ -1,8 +1,7 @@
-import pkg from 'fastify'
-const { FastifyPluginAsync } = pkg
+import { type FastifyPluginAsync } from 'fastify'
 import type { ApiResponse, PaginatedResponse } from '@caretracker/shared'
 
-const users: FastifyPluginAsync = async (fastify, opts) => {
+const users: FastifyPluginAsync = async (fastify, _opts) => {
   fastify.get<{
     Querystring: { page?: number; limit?: number }
     Reply: PaginatedResponse<any>
@@ -18,7 +17,7 @@ const users: FastifyPluginAsync = async (fastify, opts) => {
         },
       },
     },
-  }, async (request, reply) => {
+  }, async (request, _reply) => {
     const { page = 1, limit = 10 } = request.query
     
     // Mock data for now
@@ -59,7 +58,7 @@ const users: FastifyPluginAsync = async (fastify, opts) => {
         required: ['id'],
       },
     },
-  }, async (request, reply) => {
+  }, async (request, _reply) => {
     const { id } = request.params
     
     // Mock user data

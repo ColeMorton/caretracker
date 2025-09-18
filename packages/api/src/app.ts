@@ -1,5 +1,4 @@
-import pkg from 'fastify'
-const { FastifyPluginAsync } = pkg
+import { type FastifyPluginAsync } from 'fastify'
 import AutoLoad from '@fastify/autoload'
 import { join } from 'path'
 import { fileURLToPath } from 'url'

@@ -1,8 +1,7 @@
 {
-  "extends": "@caretracker/typescript-config/tsconfig.node.json",
+  "extends": "@caretracker/typescript-config/tsconfig.node.esm.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
@@ -10,6 +9,6 @@
       "@caretracker/shared": ["../shared/src"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../shared/src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

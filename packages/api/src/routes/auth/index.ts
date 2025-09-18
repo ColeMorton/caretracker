@@ -1,8 +1,7 @@
-import pkg from 'fastify'
-const { FastifyPluginAsync } = pkg
+import { type FastifyPluginAsync } from 'fastify'
 import type { ApiResponse } from '@caretracker/shared'
 
-const auth: FastifyPluginAsync = async (fastify, opts) => {
+const auth: FastifyPluginAsync = async (fastify, _opts) => {
   fastify.post<{
     Body: { email: string; password: string }
     Reply: ApiResponse<{ token: string; user: any }>
@@ -73,7 +72,7 @@ const auth: FastifyPluginAsync = async (fastify, opts) => {
       tags: ['auth'],
       description: 'Get current user',
     },
-  }, async (request, reply) => {
+  }, async (_request, _reply) => {
     // TODO: Implement JWT verification
     return {
       success: true,

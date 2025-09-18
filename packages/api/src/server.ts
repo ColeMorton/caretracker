@@ -2,12 +2,14 @@ import Fastify from 'fastify'
 import { app } from './app'
 
 const server = Fastify({
-  logger: {
-    level: process.env.LOG_LEVEL || 'info',
-    transport: process.env.NODE_ENV === 'development' 
-      ? { target: 'pino-pretty' }
-      : undefined,
-  },
+  logger: process.env.NODE_ENV === 'development' 
+    ? {
+        level: process.env.LOG_LEVEL || 'info',
+        transport: { target: 'pino-pretty' },
+      }
+    : {
+        level: process.env.LOG_LEVEL || 'info',
+      },
 })
 
 server.register(app)

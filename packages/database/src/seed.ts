@@ -16,7 +16,7 @@ async function main() {
 
   // Create admin user
   const adminPassword = await bcrypt.hash('admin123', 10)
-  const admin = await prisma.user.create({
+  const _admin = await prisma.user.create({
     data: {
       email: 'admin@caretracker.com',
       password: adminPassword,
