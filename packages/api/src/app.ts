@@ -1,18 +1,19 @@
-import { type FastifyPluginAsync } from 'fastify'
-import AutoLoad from '@fastify/autoload'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+import { type FastifyPluginAsync } from 'fastify'
+import AutoLoad from '@fastify/autoload'
 import cors from '@fastify/cors'
+import env from '@fastify/env'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import sensible from '@fastify/sensible'
-import env from '@fastify/env'
 import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 // Create environment-specific schemas
 const ciEnvSchema = {

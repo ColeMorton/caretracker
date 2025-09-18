@@ -1,10 +1,11 @@
+import type { ApiResponse, PaginatedResponse, ApiVisit } from '@caretracker/shared'
+
 import { type FastifyPluginAsync } from 'fastify'
-import type { ApiResponse, PaginatedResponse } from '@caretracker/shared'
 
 const visits: FastifyPluginAsync = async (fastify, _opts) => {
   fastify.get<{
     Querystring: { page?: number; limit?: number; clientId?: string }
-    Reply: PaginatedResponse<any>
+    Reply: PaginatedResponse<ApiVisit>
   }>('/', {
     schema: {
       tags: ['visits'],
@@ -72,7 +73,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
       scheduledAt: string
       activities: string[]
     }
-    Reply: ApiResponse<any>
+    Reply: ApiResponse<ApiVisit>
   }>('/', {
     schema: {
       tags: ['visits'],

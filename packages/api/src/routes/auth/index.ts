@@ -1,10 +1,11 @@
+import type { ApiResponse, UserProfile } from '@caretracker/shared'
+
 import { type FastifyPluginAsync } from 'fastify'
-import type { ApiResponse } from '@caretracker/shared'
 
 const auth: FastifyPluginAsync = async (fastify, _opts) => {
   fastify.post<{
     Body: { email: string; password: string }
-    Reply: ApiResponse<{ token: string; user: any }>
+    Reply: ApiResponse<{ token: string; user: UserProfile }>
   }>('/login', {
     schema: {
       tags: ['auth'],

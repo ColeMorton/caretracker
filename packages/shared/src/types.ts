@@ -1,31 +1,52 @@
 export interface ApiResponse<T = unknown> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
+  readonly success: boolean
+  readonly data?: T
+  readonly error?: string
+  readonly message?: string
 }
 
 export interface PaginationParams {
-  page: number
-  limit: number
+  readonly page: number
+  readonly limit: number
 }
 
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {
-  meta: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
+  readonly meta: {
+    readonly page: number
+    readonly limit: number
+    readonly total: number
+    readonly totalPages: number
   }
 }
 
 export interface UserProfile {
-  id: string
-  email: string
-  role: 'CLIENT' | 'WORKER' | 'ADMIN'
-  profile?: {
-    firstName: string
-    lastName: string
-    phone?: string
+  readonly id: string
+  readonly email: string
+  readonly role: 'CLIENT' | 'WORKER' | 'ADMIN'
+  readonly profile?: {
+    readonly firstName: string
+    readonly lastName: string
+    readonly phone?: string
   }
+}
+
+// API-specific types for demo endpoints (simplified versions)
+export interface ApiUser {
+  readonly id: string
+  readonly email: string
+  readonly role: string
+  readonly createdAt?: string
+}
+
+export interface ApiVisit {
+  readonly id: string
+  readonly clientId: string
+  readonly workerId: string
+  readonly scheduledAt: string
+  readonly status: string
+  readonly activities?: readonly string[]
+  readonly completedAt?: string
+  readonly duration?: number
+  readonly notes?: string
+  readonly createdAt?: string
 }

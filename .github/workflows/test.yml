@@ -47,7 +47,6 @@ jobs:
 
       - name: Run ESLint
         run: pnpm lint
-        continue-on-error: true  # Allow warnings/errors while we improve code quality
 
       - name: Run TypeScript check
         run: pnpm typecheck
