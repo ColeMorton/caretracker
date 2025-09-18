@@ -1,8 +1,9 @@
-// This is your Prisma schema file
-// Learn more: https://pris.ly/d/prisma-schema
+// CareTracker Healthcare Management System - Database Schema
+// 2025 Standards: Enhanced with audit trails, data classification, and HIPAA compliance
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/client"
 }
 
 datasource db {
@@ -10,109 +11,472 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  CLIENT
-  WORKER
-  ADMIN
+// Healthcare Data Classification (HIPAA Compliance)
+enum DataClassification {
+  PUBLIC       // Non-sensitive, public information
+  INTERNAL     // Internal business data
+  PII          // Personally Identifiable Information
+  PHI          // Protected Health Information
 }
 
+// User Roles with Healthcare Hierarchy
+enum Role {
+  CLIENT       // Care recipients
+  WORKER       // Healthcare providers/caregivers
+  ADMIN        // Administrative staff
+  SUPERVISOR   // Clinical supervisors
+}
+
+// Visit Lifecycle Status
 enum VisitStatus {
-  SCHEDULED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
+  SCHEDULED    // Future visit scheduled
+  CONFIRMED    // Visit confirmed by client
+  IN_PROGRESS  // Visit currently happening
+  COMPLETED    // Visit finished successfully
+  CANCELLED    // Visit cancelled
+  NO_SHOW      // Client didn't show up
+  RESCHEDULED  // Visit moved to different time
+}
+
+// Budget Status Tracking
+enum BudgetStatus {
+  ACTIVE       // Currently active budget
+  EXHAUSTED    // Budget fully spent
+  EXPIRED      // Budget period ended
+  SUSPENDED    // Temporarily suspended
+}
+
+// Care Plan Status
+enum CarePlanStatus {
+  DRAFT        // Being created/edited
+  ACTIVE       // Currently in use
+  ON_HOLD      // Temporarily paused
+  COMPLETED    // Goals achieved
+  DISCONTINUED // No longer needed
+}
+
+// Base model for all healthcare entities requiring audit trails
+abstract model AuditableEntity {
+  id                String      @id @default(cuid())
+
+  // 2025 Standard: Complete audit trail for HIPAA compliance
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  createdBy         String?     // User ID who created this record
+  updatedBy         String?     // User ID who last updated this record
+  deletedAt         DateTime?   // Soft delete timestamp for healthcare compliance
+
+  // 2025 Standard: Optimistic concurrency control
+  version           Int         @default(1)
+
+  // 2025 Standard: Data classification for compliance
+  dataClassification DataClassification @default(INTERNAL)
+
+  @@map("_auditable_entity")
 }
 
 model User {
-  id                String     @id @default(cuid())
-  email             String     @unique
-  password          String
-  role              Role       @default(CLIENT)
+  id                String               @id @default(cuid())
+  email             String               @unique
+  password          String               // Bcrypt hashed
+  role              Role                 @default(CLIENT)
+  isActive          Boolean              @default(true)
+  emailVerified     Boolean              @default(false)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+
+  // 2025 Standard: Enhanced security fields
   refreshToken      String?
-  profile           Profile?
-  
+  refreshTokenExpiresAt DateTime?
+  passwordResetToken String?
+  passwordResetExpiresAt DateTime?
+  loginAttempts     Int                  @default(0)
+  lockedUntil       DateTime?
+
   // Relations
-  clientVisits      Visit[]    @relation("ClientVisits")
-  workerVisits      Visit[]    @relation("WorkerVisits")
+  profile           Profile?
+  clientVisits      Visit[]              @relation("ClientVisits")
+  workerVisits      Visit[]              @relation("WorkerVisits")
+  supervisedWorkers User[]               @relation("WorkerSupervisor")
+  supervisor        User?                @relation("WorkerSupervisor", fields: [supervisorId], references: [id])
+  supervisorId      String?
   carePlans         CarePlan[]
   budgets           Budget[]
-  
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  auditLogs         AuditLog[]
+
+  // Audit trail fields (2025 Standard)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  version           Int                  @default(1)
+  dataClassification DataClassification @default(PII)
+
+  @@index([email, isActive])
+  @@index([role, isActive])
+  @@index([lastLoginAt])
+  @@index([deletedAt])
+  @@map("users")
 }
 
 model Profile {
-  id                String     @id @default(cuid())
-  userId            String     @unique
+  id                String               @id @default(cuid())
+  userId            String               @unique
+
+  // Personal Information (PHI - Protected Health Information)
   firstName         String
   lastName          String
+  middleName        String?
+  preferredName     String?
   phone             String?
-  address           String?
+  alternatePhone    String?
+  email             String?              // Secondary email
+
+  // Address Information
+  streetAddress     String?
+  city              String?
+  state             String?
+  zipCode           String?
+  country           String?              @default("US")
+
+  // Healthcare Information
   dateOfBirth       DateTime?
-  emergencyContact  Json?
-  
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  gender            String?
+  medicalRecordNumber String?            @unique
+  insuranceNumber   String?
+  insuranceProvider String?
+  primaryCarePhysician String?
+
+  // Emergency Contacts (structured for better querying)
+  emergencyContactName String?
+  emergencyContactPhone String?
+  emergencyContactRelation String?
+  emergencyContactAddress String?
+
+  // Additional Healthcare Data
+  allergies         String[]             @default([])
+  medications       String[]             @default([])
+  medicalConditions String[]             @default([])
+  specialNeeds      String?
+
+  // Profile Settings
+  preferredLanguage String?              @default("en")
+  timezone          String?              @default("America/New_York")
+  photoUrl          String?
+
+  // Relations
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Audit trail fields (2025 Standard)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  version           Int                  @default(1)
+  dataClassification DataClassification @default(PHI)
+
+  @@index([lastName, firstName])
+  @@index([dateOfBirth])
+  @@index([medicalRecordNumber])
+  @@index([deletedAt])
+  @@map("profiles")
 }
 
 model Visit {
-  id                String      @id @default(cuid())
+  id                String               @id @default(cuid())
   clientId          String
   workerId          String
+
+  // Visit Scheduling
   scheduledAt       DateTime
-  completedAt       DateTime?
-  duration          Int?        // in minutes
-  status            VisitStatus @default(SCHEDULED)
-  notes             String?
-  activities        Json        // Array of activities performed
-  
+  scheduledEndAt    DateTime?            // Calculated or manually set end time
+  actualStartAt     DateTime?            // When visit actually started
+  actualEndAt       DateTime?            // When visit actually ended
+  duration          Int?                 // Planned duration in minutes
+  actualDuration    Int?                 // Actual duration in minutes
+
+  // Visit Details
+  status            VisitStatus          @default(SCHEDULED)
+  visitType         String?              // Home visit, telehealth, etc.
+  location          String?              // Address or virtual meeting info
+  notes             String?              // Visit notes (PHI)
+  privateNotes      String?              // Internal staff notes
+
+  // Healthcare Activities (structured for better querying)
+  activities        String[]             @default([])
+  plannedActivities String[]             @default([])
+  medications       String[]             @default([])
+  vitals            Json?                // Blood pressure, heart rate, etc.
+
+  // Visit Outcomes
+  clientSatisfaction Int?                @db.SmallInt // 1-5 rating
+  workerNotes       String?              // Worker-specific notes
+  supervisorReview  String?              // Supervisor review notes
+  reviewedAt        DateTime?            // When supervisor reviewed
+  reviewedBy        String?              // Supervisor who reviewed
+
+  // Billing and Documentation
+  billableTime      Int?                 // Billable minutes
+  billingRate       Decimal?             @db.Decimal(8, 2)
+  totalCost         Decimal?             @db.Decimal(10, 2)
+  invoiceId         String?              // Reference to billing system
+  documentationComplete Boolean          @default(false)
+
+  // Cancellation/Rescheduling
+  cancellationReason String?
+  rescheduledFrom   String?              // Previous visit ID if rescheduled
+  rescheduledTo     String?              // New visit ID if rescheduled
+
   // Relations
-  client            User        @relation("ClientVisits", fields: [clientId], references: [id])
-  worker            User        @relation("WorkerVisits", fields: [workerId], references: [id])
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  
+  client            User                 @relation("ClientVisits", fields: [clientId], references: [id])
+  worker            User                 @relation("WorkerVisits", fields: [workerId], references: [id])
+  carePlan          CarePlan?            @relation(fields: [carePlanId], references: [id])
+  carePlanId        String?
+  expenses          BudgetExpense[]
+
+  // Audit trail fields (2025 Standard)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  version           Int                  @default(1)
+  dataClassification DataClassification @default(PHI)
+
   @@index([clientId, scheduledAt])
   @@index([workerId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@index([actualStartAt])
+  @@index([deletedAt])
+  @@index([carePlanId])
+  @@map("visits")
 }
 
 model CarePlan {
-  id                String      @id @default(cuid())
+  id                String               @id @default(cuid())
   clientId          String
+
+  // Care Plan Basics
   name              String
   description       String?
-  goals             Json        // Array of care goals
-  activities        Json        // Standard activities for this care plan
+  status            CarePlanStatus       @default(DRAFT)
+  priority          String?              @default("MEDIUM") // HIGH, MEDIUM, LOW
+  category          String?              // Medical, Personal Care, etc.
+
+  // Care Goals (structured for better tracking)
+  goals             String[]             @default([])
+  objectives        Json?                // Detailed objectives with metrics
+  expectedOutcomes  String[]             @default([])
+
+  // Activities and Care Instructions
+  standardActivities String[]            @default([])
+  specialInstructions String?
+  medicationReminders String[]           @default([])
+  emergencyProtocols String?
+
+  // Timeline
   startDate         DateTime
   endDate           DateTime?
-  isActive          Boolean     @default(true)
-  
+  reviewDate        DateTime?            // Next review date
+  lastReviewDate    DateTime?            // Last review date
+
+  // Assessment and Progress
+  initialAssessment String?
+  progressNotes     String[]             @default([])
+  goalsAchieved     String[]             @default([])
+  challengesFaced   String[]             @default([])
+
+  // Clinical Information
+  diagnosisCodes    String[]             @default([])
+  treatmentPlan     String?
+  restrictionsLimitations String?
+  safetyConsiderations String?
+
+  // Care Team
+  primaryCaregiver  String?              // Worker ID
+  supervising       String?              // Supervisor ID
+  familyContacts    Json?                // Family member contact info
+
+  // Plan Approval and Review
+  approvedBy        String?              // Supervisor/Clinical manager ID
+  approvedAt        DateTime?
+  nextReviewBy      String?              // Who should review next
+
   // Relations
-  client            User        @relation(fields: [clientId], references: [id])
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  
-  @@index([clientId, isActive])
+  client            User                 @relation(fields: [clientId], references: [id])
+  visits            Visit[]
+
+  // Audit trail fields (2025 Standard)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  version           Int                  @default(1)
+  dataClassification DataClassification @default(PHI)
+
+  @@index([clientId, status])
+  @@index([status, startDate])
+  @@index([reviewDate])
+  @@index([deletedAt])
+  @@map("care_plans")
 }
 
 model Budget {
-  id                String      @id @default(cuid())
+  id                String               @id @default(cuid())
   clientId          String
-  total             Decimal     @db.Decimal(10, 2)
-  spent             Decimal     @db.Decimal(10, 2) @default(0)
-  period            DateTime    // Month/Year for this budget
-  allocations       Json?       // Breakdown of budget allocations
-  
+
+  // Budget Details
+  name              String               // e.g., "January 2025 Home Care Budget"
+  description       String?
+  status            BudgetStatus         @default(ACTIVE)
+  budgetType        String               @default("MONTHLY") // MONTHLY, WEEKLY, ANNUAL
+
+  // Financial Information
+  totalAllocated    Decimal              @db.Decimal(12, 2)
+  totalSpent        Decimal              @db.Decimal(12, 2) @default(0)
+  totalCommitted    Decimal              @db.Decimal(12, 2) @default(0) // Pending/scheduled expenses
+  remaining         Decimal              @db.Decimal(12, 2) @default(0) // Calculated field
+
+  // Time Period
+  periodStart       DateTime
+  periodEnd         DateTime
+  fiscalYear        Int?
+
+  // Budget Categories (structured for reporting)
+  personalCare      Decimal?             @db.Decimal(10, 2) @default(0)
+  medicalServices   Decimal?             @db.Decimal(10, 2) @default(0)
+  transportation    Decimal?             @db.Decimal(10, 2) @default(0)
+  homeModifications Decimal?             @db.Decimal(10, 2) @default(0)
+  emergencyFund     Decimal?             @db.Decimal(10, 2) @default(0)
+  other             Decimal?             @db.Decimal(10, 2) @default(0)
+
+  // Spending Tracking
+  personalCareSpent      Decimal?        @db.Decimal(10, 2) @default(0)
+  medicalServicesSpent   Decimal?        @db.Decimal(10, 2) @default(0)
+  transportationSpent    Decimal?        @db.Decimal(10, 2) @default(0)
+  homeModificationsSpent Decimal?        @db.Decimal(10, 2) @default(0)
+  emergencyFundSpent     Decimal?        @db.Decimal(10, 2) @default(0)
+  otherSpent             Decimal?        @db.Decimal(10, 2) @default(0)
+
+  // Budget Management
+  approvedBy        String?              // Manager who approved budget
+  approvedAt        DateTime?
+  lastReviewDate    DateTime?
+  nextReviewDate    DateTime?
+  autoRenew         Boolean              @default(false)
+
+  // Alerts and Thresholds
+  warningThreshold  Decimal?             @db.Decimal(5, 2) @default(80.00) // Percentage
+  criticalThreshold Decimal?             @db.Decimal(5, 2) @default(95.00) // Percentage
+  alertsEnabled     Boolean              @default(true)
+
+  // Budget Source/Funding
+  fundingSource     String?              // Insurance, private pay, etc.
+  authorizationNumber String?
+  authorizationExpiry DateTime?
+
+  // Notes and Documentation
+  notes             String?
+  restrictions      String?              // Any spending restrictions
+  approvalRequired  Boolean              @default(false) // Requires approval for spending
+
   // Relations
-  client            User        @relation(fields: [clientId], references: [id])
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  
-  @@unique([clientId, period])
-  @@index([clientId, period])
+  client            User                 @relation(fields: [clientId], references: [id])
+  expenses          BudgetExpense[]
+
+  // Audit trail fields (2025 Standard)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  version           Int                  @default(1)
+  dataClassification DataClassification @default(PII)
+
+  @@unique([clientId, periodStart, periodEnd])
+  @@index([clientId, status])
+  @@index([periodStart, periodEnd])
+  @@index([status, nextReviewDate])
+  @@index([deletedAt])
+  @@map("budgets")
+}
+
+// New model for tracking individual budget expenses
+model BudgetExpense {
+  id                String               @id @default(cuid())
+  budgetId          String
+  visitId           String?              // Link to visit if expense is from a visit
+
+  // Expense Details
+  description       String
+  category          String               // Which budget category this belongs to
+  amount            Decimal              @db.Decimal(10, 2)
+  expenseDate       DateTime
+  approvedBy        String?
+  approvedAt        DateTime?
+
+  // Expense Status
+  status            String               @default("PENDING") // PENDING, APPROVED, REJECTED, PAID
+  receiptUrl        String?              // Link to receipt/documentation
+  notes             String?
+
+  // Relations
+  budget            Budget               @relation(fields: [budgetId], references: [id])
+  visit             Visit?               @relation(fields: [visitId], references: [id])
+
+  // Audit trail fields (2025 Standard)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  version           Int                  @default(1)
+  dataClassification DataClassification @default(PII)
+
+  @@index([budgetId, expenseDate])
+  @@index([status, approvedAt])
+  @@index([category, expenseDate])
+  @@index([deletedAt])
+  @@map("budget_expenses")
+}
+
+// New model for comprehensive audit logging (HIPAA requirement)
+model AuditLog {
+  id                String               @id @default(cuid())
+
+  // Audit Information
+  userId            String?              // User who performed the action
+  entityType        String               // Table/model name
+  entityId          String               // Record ID
+  action            String               // CREATE, UPDATE, DELETE, READ
+  oldValues         Json?                // Previous values (for updates)
+  newValues         Json?                // New values (for creates/updates)
+
+  // Context Information
+  ipAddress         String?
+  userAgent         String?
+  sessionId         String?
+  requestId         String?              // For tracing requests
+  endpoint          String?              // API endpoint called
+
+  // Compliance Information
+  reason            String?              // Reason for access/change
+  approvalRequired  Boolean              @default(false)
+  approvedBy        String?              // Who approved this action
+  dataAccessed      DataClassification?  // Level of data accessed
+
+  // Relations
+  user              User?                @relation(fields: [userId], references: [id])
+
+  // Timestamp (cannot be modified once created)
+  createdAt         DateTime             @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([dataAccessed, createdAt])
+  @@map("audit_logs")
 }
