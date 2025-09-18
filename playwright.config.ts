@@ -63,14 +63,19 @@ export default defineConfig({
       timeout: 120000,
     },
     {
-      command: 'pnpm --filter @caretracker/api dev',
+      command: process.env.CI 
+        ? 'pnpm --filter @caretracker/api dev:ci'
+        : 'pnpm --filter @caretracker/api dev',
       port: 4000,
       reuseExistingServer: true,
       timeout: 120000,
       env: {
         NODE_ENV: 'test',
-        DATABASE_URL: 'postgresql://test:test@localhost:5432/caretracker_test',
+        DATABASE_URL: process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/caretracker_test',
         PORT: '4000',
+        JWT_SECRET: process.env.JWT_SECRET || 'ci-test-secret-key-for-testing-only',
+        HOST: '0.0.0.0',
+        LOG_LEVEL: process.env.LOG_LEVEL || 'info',
       },
     },
   ],

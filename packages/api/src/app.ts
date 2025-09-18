@@ -16,21 +16,33 @@ import swaggerUI from '@fastify/swagger-ui'
 
 const envSchema = {
   type: 'object',
-  required: ['DATABASE_URL'],
+  required: process.env.CI === 'true' ? [] : ['DATABASE_URL'],
   properties: {
-    DATABASE_URL: { type: 'string' },
-    JWT_SECRET: { type: 'string', default: 'your-secret-key' },
-    PORT: { type: 'number', default: 3001 },
+    DATABASE_URL: { 
+      type: 'string',
+      default: process.env.CI === 'true' 
+        ? 'postgresql://test:test@localhost:5432/caretracker_test'
+        : undefined
+    },
+    JWT_SECRET: { 
+      type: 'string', 
+      default: process.env.CI === 'true' 
+        ? 'ci-test-secret-key-for-testing-only'
+        : 'your-secret-key' 
+    },
+    PORT: { type: 'number', default: 4000 },
     HOST: { type: 'string', default: '0.0.0.0' },
     NODE_ENV: { type: 'string', default: 'development' },
+    LOG_LEVEL: { type: 'string', default: 'info' },
   },
 }
 
 export const app: FastifyPluginAsync = async (fastify, opts) => {
-  // Environment variables
+  // Environment variables with CI-friendly configuration
   await fastify.register(env, {
     schema: envSchema,
-    dotenv: true,
+    dotenv: process.env.CI !== 'true', // Skip dotenv in CI environment
+    data: process.env.CI === 'true' ? process.env : undefined, // Use process.env directly in CI
   })
 
   // Security plugins
