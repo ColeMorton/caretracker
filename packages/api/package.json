@@ -1,0 +1,52 @@
+{
+  "name": "@caretracker/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env.development src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "test:unit": "vitest run --reporter=verbose",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@fastify/autoload": "^5.8.0",
+    "@fastify/cors": "^8.5.0",
+    "@fastify/env": "^4.3.0",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/jwt": "^8.0.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/sensible": "^5.5.0",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^2.1.0",
+    "@prisma/client": "^5.8.1",
+    "bcryptjs": "^2.4.3",
+    "fastify": "^4.25.2",
+    "fastify-plugin": "^4.5.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@caretracker/database": "workspace:*",
+    "@caretracker/shared": "workspace:*",
+    "@caretracker/typescript-config": "workspace:*",
+    "@testcontainers/postgresql": "^11.6.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.11.0",
+    "@types/supertest": "^6.0.2",
+    "@vitest/coverage-v8": "^1.2.2",
+    "pino-pretty": "^10.3.1",
+    "prisma": "^5.8.1",
+    "supertest": "^6.3.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  }
+}

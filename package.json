@@ -1,0 +1,59 @@
+{
+  "name": "caretracker",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tooling/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
+    "database:generate": "turbo database:generate",
+    "database:push": "turbo database:push",
+    "database:migrate": "turbo database:migrate",
+    "database:seed": "turbo database:seed",
+    "test": "turbo test",
+    "test:unit": "turbo test:unit",
+    "test:integration": "turbo test:integration",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:coverage": "turbo test:coverage",
+    "test:watch": "turbo test:watch",
+    "test:ui": "vitest --ui",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.3.1",
+    "@playwright/test": "^1.41.2",
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.2.2",
+    "@vitest/ui": "^1.2.2",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.4",
+    "prettier-plugin-tailwindcss": "^0.5.11",
+    "turbo": "^1.11.3",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,scss,md}": [
+      "prettier --write"
+    ]
+  }
+}

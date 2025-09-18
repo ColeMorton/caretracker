@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    extends:
+      file: docker-compose.yml
+      service: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  redis:
+    extends:
+      file: docker-compose.yml
+      service: redis
+
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+      platform: linux/arm64
+    container_name: caretracker_api
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:localpass@postgres:5432/caretracker
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=development-secret-key
+      - NODE_ENV=development
+      - PORT=3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./packages/api:/app/packages/api
+      - ./packages/shared:/app/packages/shared
+      - ./packages/database:/app/packages/database
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - caretracker_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  caretracker_network:
+    driver: bridge

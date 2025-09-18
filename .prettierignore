@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+*.log
+*.tsbuildinfo
+.env*
+pnpm-lock.yaml
+.git/

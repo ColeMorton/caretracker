@@ -1,0 +1,118 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  WORKER
+  ADMIN
+}
+
+enum VisitStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  password          String
+  role              Role       @default(CLIENT)
+  refreshToken      String?
+  profile           Profile?
+  
+  // Relations
+  clientVisits      Visit[]    @relation("ClientVisits")
+  workerVisits      Visit[]    @relation("WorkerVisits")
+  carePlans         CarePlan[]
+  budgets           Budget[]
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model Profile {
+  id                String     @id @default(cuid())
+  userId            String     @unique
+  firstName         String
+  lastName          String
+  phone             String?
+  address           String?
+  dateOfBirth       DateTime?
+  emergencyContact  Json?
+  
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model Visit {
+  id                String      @id @default(cuid())
+  clientId          String
+  workerId          String
+  scheduledAt       DateTime
+  completedAt       DateTime?
+  duration          Int?        // in minutes
+  status            VisitStatus @default(SCHEDULED)
+  notes             String?
+  activities        Json        // Array of activities performed
+  
+  // Relations
+  client            User        @relation("ClientVisits", fields: [clientId], references: [id])
+  worker            User        @relation("WorkerVisits", fields: [workerId], references: [id])
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  @@index([clientId, scheduledAt])
+  @@index([workerId, scheduledAt])
+}
+
+model CarePlan {
+  id                String      @id @default(cuid())
+  clientId          String
+  name              String
+  description       String?
+  goals             Json        // Array of care goals
+  activities        Json        // Standard activities for this care plan
+  startDate         DateTime
+  endDate           DateTime?
+  isActive          Boolean     @default(true)
+  
+  // Relations
+  client            User        @relation(fields: [clientId], references: [id])
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  @@index([clientId, isActive])
+}
+
+model Budget {
+  id                String      @id @default(cuid())
+  clientId          String
+  total             Decimal     @db.Decimal(10, 2)
+  spent             Decimal     @db.Decimal(10, 2) @default(0)
+  period            DateTime    // Month/Year for this budget
+  allocations       Json?       // Breakdown of budget allocations
+  
+  // Relations
+  client            User        @relation(fields: [clientId], references: [id])
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  @@unique([clientId, period])
+  @@index([clientId, period])
+}
