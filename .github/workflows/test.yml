@@ -62,10 +62,10 @@ jobs:
         run: pnpm test:unit
         timeout-minutes: 10
 
-      - name: Upload unit test coverage
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit
           name: unit-tests
 
@@ -130,10 +130,10 @@ jobs:
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
-      - name: Upload integration test coverage
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
           flags: integration
           name: integration-tests
 
