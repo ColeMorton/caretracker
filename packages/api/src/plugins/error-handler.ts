@@ -1,7 +1,8 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
+import { Prisma } from '@prisma/client'
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import fp from 'fastify-plugin'
 import { ZodError } from 'zod'
-import { Prisma } from '@prisma/client'
+
 import { AppError, ErrorCode, ValidationError, DatabaseError, SystemError } from '../utils/errors.js'
 
 interface ErrorResponse {
@@ -23,7 +24,7 @@ interface User {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: User
+    readonly user?: User
   }
 }
 
@@ -105,33 +106,30 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
 
     // Handle Prisma errors
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      let appError: AppError
-
-      switch (error.code) {
-        case 'P2002':
-          // Unique constraint violation
-          const target = error.meta?.target as string[] | undefined
-          const field = target?.[0] || 'field'
-          appError = new ValidationError(`${field} already exists`, {
-            field,
-            code: error.code,
-            message: 'Unique constraint violation'
-          })
-          break
-        case 'P2025':
-          // Record not found
-          appError = new AppError(ErrorCode.RESOURCE_NOT_FOUND, 'Record not found', 404)
-          break
-        case 'P2034':
-          // Transaction failed due to write conflict
-          appError = new AppError(ErrorCode.OPTIMISTIC_LOCK_ERROR, 'Resource was modified by another user', 409)
-          break
-        default:
-          appError = new DatabaseError('Database operation failed', {
-            code: error.code,
-            message: error.message
-          })
-      }
+      const appError: AppError = (() => {
+        switch (error.code) {
+          case 'P2002':
+            // Unique constraint violation
+            const target = error.meta?.target as readonly string[] | undefined
+            const field = target?.[0] || 'field'
+            return new ValidationError(`${field} already exists`, {
+              field,
+              code: error.code,
+              message: 'Unique constraint violation'
+            })
+          case 'P2025':
+            // Record not found
+            return new AppError(ErrorCode.RESOURCE_NOT_FOUND, 'Record not found', 404)
+          case 'P2034':
+            // Transaction failed due to write conflict
+            return new AppError(ErrorCode.OPTIMISTIC_LOCK_ERROR, 'Resource was modified by another user', 409)
+          default:
+            return new DatabaseError('Database operation failed', {
+              code: error.code,
+              message: error.message
+            })
+        }
+      })()
 
       const errorResponse: ErrorResponse = {
         success: false,

@@ -1,14 +1,14 @@
-import { FastifyPluginAsync } from 'fastify'
-import fp from 'fastify-plugin'
 import { PrismaClient } from '@prisma/client'
+import type { FastifyPluginAsync } from 'fastify'
+import fp from 'fastify-plugin'
 
 declare module 'fastify' {
   interface FastifyInstance {
-    prisma: PrismaClient
+    readonly prisma: PrismaClient
     checkDatabaseHealth(): Promise<{
-      status: 'healthy' | 'unhealthy'
-      timestamp: Date
-      error?: string
+      readonly status: 'healthy' | 'unhealthy'
+      readonly timestamp: Date
+      readonly error?: string
     }>
   }
 }

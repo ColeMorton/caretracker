@@ -44,7 +44,7 @@ export class AppError extends Error {
     public readonly code: ErrorCode,
     public readonly message: string,
     public readonly statusCode: number,
-    public readonly details?: ErrorDetails | ErrorDetails[]
+    public readonly details?: ErrorDetails | readonly ErrorDetails[]
   ) {
     super(message)
     this.name = this.constructor.name
@@ -52,7 +52,13 @@ export class AppError extends Error {
     Error.captureStackTrace(this, this.constructor)
   }
 
-  toJSON() {
+  toJSON(): {
+    readonly code: string
+    readonly message: string
+    readonly statusCode: number
+    readonly details?: Record<string, unknown>
+    readonly timestamp: string
+  } {
     return {
       code: this.code,
       message: this.message,
@@ -64,7 +70,7 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, details?: ErrorDetails | ErrorDetails[]) {
+  constructor(message: string, details?: ErrorDetails | readonly ErrorDetails[]) {
     super(ErrorCode.VALIDATION_ERROR, message, 400, details)
   }
 }

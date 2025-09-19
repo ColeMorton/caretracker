@@ -1,4 +1,5 @@
 import { z } from 'zod'
+
 import {
   cuidSchema,
   emailSchema,
@@ -81,6 +82,19 @@ export const userFilterSchema = baseFilterSchema.extend({
   emailVerified: z.boolean().optional(),
   supervisorId: cuidSchema.optional()
 })
+
+// Alias for route imports
+export const getUsersQuerySchema = userFilterSchema
+
+// Get user by ID params schema
+export const getUserByIdParamsSchema = z.object({
+  id: cuidSchema
+})
+
+// Response schemas for routes
+export const getUsersResponseSchema = userListResponseSchema
+export const getUserByIdResponseSchema = userDetailResponseSchema
+export const updateUserResponseSchema = userDetailResponseSchema
 
 // User response schema
 export const userResponseSchema = z.object({

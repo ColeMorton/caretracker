@@ -1,6 +1,6 @@
 import { type FastifyPluginAsync } from 'fastify'
+
 import { VisitRepository } from '../../repositories/visit.repository.js'
-import { AuditService } from '../../services/audit.service.js'
 import {
   getVisitsQuerySchema,
   getVisitsResponseSchema,
@@ -14,7 +14,7 @@ import {
   checkoutRequestSchema,
   rescheduleVisitRequestSchema
 } from '../../schemas/visits.js'
-import { NotFoundError, ValidationError, AuthenticationError, AuthorizationError, BusinessRuleError } from '../../utils/errors.js'
+import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
 
 const visits: FastifyPluginAsync = async (fastify, _opts) => {
   const visitRepository = new VisitRepository(
@@ -42,7 +42,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     const { page = 1, limit = 10, ...filters } = query
 
     // Role-based filtering
-    let visitFilters = { ...filters }
+    const visitFilters = { ...filters }
 
     if (request.user!.role === 'CLIENT') {
       // Clients can only see their own visits
@@ -123,7 +123,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
       visit.workerId === request.user!.id
 
     if (!canAccess) {
-      throw new UnauthorizedError('Cannot access this visit')
+      throw new AuthorizationError('Cannot access this visit')
     }
 
     return reply.status(200).send({

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+
 import {
   cuidSchema,
   dateTimeSchema,
@@ -14,6 +15,9 @@ import {
   currencySchema,
   dataClassificationSchema
 } from './common.js'
+
+const REASON_TOO_LONG_MESSAGE = 'Reason too long'
+const LOCATION_TOO_LONG_MESSAGE = LOCATION_TOO_LONG_MESSAGE
 
 // Vitals schema for healthcare measurements
 export const vitalsSchema = z.object({
@@ -39,7 +43,7 @@ export const createVisitSchema = z.object({
   duration: positiveIntSchema.min(15, 'Visit must be at least 15 minutes').max(480, 'Visit cannot exceed 8 hours').optional(),
 
   visitType: z.string().max(50, 'Visit type too long').optional(),
-  location: z.string().max(200, 'Location too long').optional(),
+  location: z.string().max(200, LOCATION_TOO_LONG_MESSAGE).optional(),
 
   activities: activitiesArraySchema.optional(),
   plannedActivities: activitiesArraySchema.optional(),
@@ -66,7 +70,7 @@ export const updateVisitSchema = z.object({
 
   status: visitStatusSchema.optional(),
   visitType: z.string().max(50, 'Visit type too long').optional(),
-  location: z.string().max(200, 'Location too long').optional(),
+  location: z.string().max(200, LOCATION_TOO_LONG_MESSAGE).optional(),
 
   activities: activitiesArraySchema.optional(),
   plannedActivities: activitiesArraySchema.optional(),
@@ -80,7 +84,7 @@ export const updateVisitSchema = z.object({
 
 // Visit check-in schema
 export const visitCheckinSchema = z.object({
-  location: z.string().max(200, 'Location too long').optional(),
+  location: z.string().max(200, LOCATION_TOO_LONG_MESSAGE).optional(),
   notes: z.string().max(500, 'Check-in notes too long').optional(),
   arrivalMethod: z.enum(['walking', 'driving', 'public_transport', 'other']).optional()
 })
@@ -210,7 +214,7 @@ export const createVisitResponseSchema = successResponseSchema.extend({
 // Visit status update schema
 export const updateVisitStatusSchema = z.object({
   status: visitStatusSchema,
-  reason: z.string().max(200, 'Reason too long').optional(),
+  reason: z.string().max(200, REASON_TOO_LONG_MESSAGE).optional(),
   notifyParties: z.boolean().default(true)
 })
 
@@ -218,7 +222,7 @@ export const updateVisitStatusSchema = z.object({
 export const rescheduleVisitSchema = z.object({
   newScheduledAt: dateTimeSchema,
   newScheduledEndAt: dateTimeSchema.optional(),
-  reason: z.string().min(1, 'Reschedule reason required').max(200, 'Reason too long'),
+  reason: z.string().min(1, 'Reschedule reason required').max(200, REASON_TOO_LONG_MESSAGE),
   notifyParties: z.boolean().default(true)
 }).refine(data => {
   if (data.newScheduledEndAt) {
@@ -236,7 +240,7 @@ export const bulkVisitActionSchema = z.object({
   action: z.enum(['cancel', 'reschedule', 'approve', 'mark_reviewed'], {
     errorMap: () => ({ message: 'Invalid bulk action' })
   }),
-  reason: z.string().max(200, 'Reason too long').optional(),
+  reason: z.string().max(200, REASON_TOO_LONG_MESSAGE).optional(),
   newScheduledAt: dateTimeSchema.optional()
 })
 
@@ -253,3 +257,19 @@ export const visitStatsResponseSchema = successResponseSchema.extend({
     completionRate: z.number().min(0).max(100)
   })
 })
+
+// Route import aliases
+export const getVisitsQuerySchema = visitFilterSchema
+export const getVisitsResponseSchema = visitListResponseSchema
+
+export const getVisitByIdParamsSchema = z.object({
+  id: cuidSchema
+})
+
+export const getVisitByIdResponseSchema = visitDetailResponseSchema
+export const createVisitRequestSchema = createVisitSchema
+export const updateVisitRequestSchema = updateVisitSchema
+export const updateVisitResponseSchema = visitDetailResponseSchema
+export const checkinRequestSchema = visitCheckinSchema
+export const checkoutRequestSchema = visitCheckoutSchema
+export const rescheduleVisitRequestSchema = rescheduleVisitSchema

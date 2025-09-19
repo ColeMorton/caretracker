@@ -1,6 +1,6 @@
 import { type FastifyPluginAsync } from 'fastify'
+
 import { UserRepository } from '../../repositories/user.repository.js'
-import { AuditService } from '../../services/audit.service.js'
 import {
   getUsersQuerySchema,
   getUsersResponseSchema,
@@ -11,7 +11,7 @@ import {
   updateUserRequestSchema,
   updateUserResponseSchema
 } from '../../schemas/users.js'
-import { NotFoundError, ValidationError, AuthenticationError, AuthorizationError } from '../../utils/errors.js'
+import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
 
 const users: FastifyPluginAsync = async (fastify, _opts) => {
   const userRepository = new UserRepository(
@@ -93,7 +93,7 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
 
     // Check ownership: users can only view their own data unless they're admin/supervisor
     if (!['ADMIN', 'SUPERVISOR'].includes(request.user!.role) && request.user!.id !== id) {
-      throw new UnauthorizedError('Cannot access other user data')
+      throw new AuthorizationError('Cannot access other user data')
     }
 
     const user = await userRepository.findById(id, request.user!.id, {
@@ -204,7 +204,7 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
 
     // Check ownership: users can only update their own data unless they're admin/supervisor
     if (!['ADMIN', 'SUPERVISOR'].includes(request.user!.role) && request.user!.id !== id) {
-      throw new UnauthorizedError('Cannot update other user data')
+      throw new AuthorizationError('Cannot update other user data')
     }
 
     const user = await userRepository.updateWithProfile(id, updateData, request.user!.id)

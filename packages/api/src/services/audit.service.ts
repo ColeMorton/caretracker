@@ -1,5 +1,5 @@
-import { PrismaClient, DataClassification } from '@caretracker/database'
-import { FastifyInstance } from 'fastify'
+import type { PrismaClient, DataClassification } from '@caretracker/database'
+import type { FastifyInstance } from 'fastify'
 
 export interface AuditLogEntry {
   readonly userId?: string
@@ -36,8 +36,8 @@ export interface AuditStatistics {
   readonly eventsByAction: Record<string, number>
   readonly eventsByEntityType: Record<string, number>
   readonly eventsByDataClassification: Record<string, number>
-  readonly topUsers: Array<{ userId: string; eventCount: number }>
-  readonly recentActivity: AuditLogEntry[]
+  readonly topUsers: ReadonlyArray<{ readonly userId: string; readonly eventCount: number }>
+  readonly recentActivity: readonly AuditLogEntry[]
 }
 
 export class AuditService {
@@ -249,10 +249,10 @@ export class AuditService {
   }
 
   async queryAuditLogs(query: AuditQuery): Promise<{
-    data: AuditLogEntry[]
-    total: number
-    page: number
-    limit: number
+    readonly data: readonly AuditLogEntry[]
+    readonly total: number
+    readonly page: number
+    readonly limit: number
   }> {
     const {
       userId,
@@ -489,13 +489,13 @@ export class AuditService {
   // Helper method to create audit logger function for repositories
   createAuditLogger() {
     return async (context: {
-      userId: string
-      action: 'CREATE' | 'UPDATE' | 'DELETE' | 'READ'
-      entityType: string
-      entityId: string
-      oldValues?: Record<string, unknown>
-      newValues?: Record<string, unknown>
-      reason?: string
+      readonly userId: string
+      readonly action: 'CREATE' | 'UPDATE' | 'DELETE' | 'READ'
+      readonly entityType: string
+      readonly entityId: string
+      readonly oldValues?: Record<string, unknown>
+      readonly newValues?: Record<string, unknown>
+      readonly reason?: string
     }) => {
       await this.logEvent({
         ...context,

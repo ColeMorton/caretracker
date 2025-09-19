@@ -1,5 +1,8 @@
-import { PrismaClient, PrismaTransactionClient } from '@caretracker/database'
+import type { PrismaClient, PrismaTransactionClient } from '@caretracker/database'
+
 import { OptimisticLockError, NotFoundError, DatabaseError } from '../utils/errors.js'
+
+const UNKNOWN_ERROR_MESSAGE = 'Unknown error'
 
 export interface AuditableEntity {
   readonly id: string
@@ -11,11 +14,11 @@ export interface AuditableEntity {
   readonly version: number
 }
 
-export interface CreateInput<T> {
+export type CreateInput<T> = {
   readonly [K in keyof Omit<T, keyof AuditableEntity>]: T[K]
 }
 
-export interface UpdateInput<T> {
+export type UpdateInput<T> = {
   readonly [K in keyof Omit<T, keyof AuditableEntity>]?: T[K]
 }
 
@@ -88,7 +91,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     } catch (error) {
       throw new DatabaseError(`Failed to create ${this.entityName}`, {
         field: 'general',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -116,12 +119,12 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     } catch (error) {
       throw new DatabaseError(`Failed to find ${this.entityName}`, {
         field: 'id',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
 
-  async findMany(options: FindManyOptions = {}, userId?: string): Promise<T[]> {
+  async findMany(options: FindManyOptions = {}, userId?: string): Promise<readonly T[]> {
     try {
       const {
         skip = 0,
@@ -157,12 +160,12 @@ export abstract class BaseRepository<T extends AuditableEntity> {
         })
       }
 
-      return entities as T[]
+      return entities as readonly T[]
 
     } catch (error) {
       throw new DatabaseError(`Failed to find ${this.entityName} records`, {
         field: 'query',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -217,7 +220,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
       }
 
       return {
-        data: entities as T[],
+        data: entities as readonly T[],
         meta: {
           page,
           limit,
@@ -229,7 +232,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     } catch (error) {
       throw new DatabaseError(`Failed to find paginated ${this.entityName} records`, {
         field: 'pagination',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -297,7 +300,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
 
       throw new DatabaseError(`Failed to update ${this.entityName}`, {
         field: 'general',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -347,7 +350,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
 
       throw new DatabaseError(`Failed to delete ${this.entityName}`, {
         field: 'general',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -364,7 +367,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     } catch (error) {
       throw new DatabaseError(`Failed to check if ${this.entityName} exists`, {
         field: 'id',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -384,7 +387,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     } catch (error) {
       throw new DatabaseError(`Failed to count ${this.entityName} records`, {
         field: 'count',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }
@@ -398,7 +401,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     } catch (error) {
       throw new DatabaseError(`Transaction failed in ${this.entityName} repository`, {
         field: 'transaction',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE
       })
     }
   }

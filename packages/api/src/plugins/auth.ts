@@ -1,20 +1,23 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify'
-import fp from 'fastify-plugin'
 import jwt from '@fastify/jwt'
-import { AuthService, JWTPayload } from '../services/auth.service.js'
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify'
+import fp from 'fastify-plugin'
+
+import { AuthService } from '../services/auth.service.js'
 import { AuthenticationError, AuthorizationError } from '../utils/errors.js'
+
+const AUTHENTICATION_REQUIRED_MESSAGE = 'Authentication required'
 
 declare module 'fastify' {
   interface FastifyInstance {
-    authService: AuthService
-    authenticate: preHandlerHookHandler
-    requirePermission: (permission: string) => preHandlerHookHandler
-    requireRole: (...roles: string[]) => preHandlerHookHandler
-    requireOwnership: (resourceParam?: string) => preHandlerHookHandler
+    readonly authService: AuthService
+    readonly authenticate: preHandlerHookHandler
+    readonly requirePermission: (permission: string) => preHandlerHookHandler
+    readonly requireRole: (...roles: readonly string[]) => preHandlerHookHandler
+    readonly requireOwnership: (resourceParam?: string) => preHandlerHookHandler
   }
 
   interface FastifyRequest {
-    user?: {
+    readonly user?: {
       readonly id: string
       readonly email: string
       readonly role: string
@@ -45,7 +48,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('authService', authService)
 
   // Authentication hook - verifies JWT token
-  const authenticate: preHandlerHookHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  const authenticate: preHandlerHookHandler = async (request: FastifyRequest, _reply: FastifyReply) => {
     try {
       const authHeader = request.headers.authorization
 
@@ -93,9 +96,9 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
   // Permission-based authorization hook
   const requirePermission = (permission: string): preHandlerHookHandler => {
-    return async (request: FastifyRequest, reply: FastifyReply) => {
+    return async (request: FastifyRequest, _reply: FastifyReply) => {
       if (!request.user) {
-        throw new AuthenticationError('Authentication required')
+        throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
       const hasPermission = await authService.checkPermission(request.user.id, permission)
@@ -124,10 +127,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   }
 
   // Role-based authorization hook
-  const requireRole = (...allowedRoles: string[]): preHandlerHookHandler => {
-    return async (request: FastifyRequest, reply: FastifyReply) => {
+  const requireRole = (...allowedRoles: readonly string[]): preHandlerHookHandler => {
+    return async (request: FastifyRequest, _reply: FastifyReply) => {
       if (!request.user) {
-        throw new AuthenticationError('Authentication required')
+        throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
       if (!allowedRoles.includes(request.user.role)) {
@@ -154,9 +157,9 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
   // Ownership-based authorization (user can only access their own resources)
   const requireOwnership = (resourceParam: string = 'id'): preHandlerHookHandler => {
-    return async (request: FastifyRequest, reply: FastifyReply) => {
+    return async (request: FastifyRequest, _reply: FastifyReply) => {
       if (!request.user) {
-        throw new AuthenticationError('Authentication required')
+        throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
       // Admin and Supervisor roles can access all resources
@@ -287,7 +290,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // Helper method to check if current user has role
-  fastify.decorate('hasRole', (request: FastifyRequest, ...roles: string[]): boolean => {
+  fastify.decorate('hasRole', (request: FastifyRequest, ...roles: readonly string[]): boolean => {
     if (!request.user) return false
     return roles.includes(request.user.role)
   })

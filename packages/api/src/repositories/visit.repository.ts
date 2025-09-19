@@ -1,10 +1,16 @@
-import { Visit, User, CarePlan, PrismaClient, VisitStatus } from '@caretracker/database'
-import { BaseRepository, AuditContext, PaginatedResult } from './base.repository.js'
+import type { Visit, User, CarePlan, PrismaClient, VisitStatus } from '@caretracker/database'
+
 import { NotFoundError, BusinessRuleError, ConflictError } from '../utils/errors.js'
 
+import type { AuditContext, PaginatedResult } from './base.repository.js';
+import { BaseRepository } from './base.repository.js'
+
+const VISIT_NOT_FOUND_MESSAGE = 'Visit not found'
+
+
 export interface VisitWithRelations extends Visit {
-  readonly client?: User & { profile?: any } | null
-  readonly worker?: User & { profile?: any } | null
+  readonly client?: User & { readonly profile?: { readonly firstName: string; readonly lastName: string; readonly phone?: string | null } | null } | null
+  readonly worker?: User & { readonly profile?: { readonly firstName: string; readonly lastName: string; readonly phone?: string | null } | null } | null
   readonly carePlan?: CarePlan | null
 }
 
@@ -29,8 +35,8 @@ export interface CreateVisitData {
   readonly duration?: number
   readonly visitType?: string
   readonly location?: string
-  readonly activities?: string[]
-  readonly plannedActivities?: string[]
+  readonly activities?: readonly string[]
+  readonly plannedActivities?: readonly string[]
   readonly notes?: string
   readonly privateNotes?: string
   readonly carePlanId?: string
@@ -44,8 +50,8 @@ export interface UpdateVisitData {
   readonly status?: VisitStatus
   readonly visitType?: string
   readonly location?: string
-  readonly activities?: string[]
-  readonly plannedActivities?: string[]
+  readonly activities?: readonly string[]
+  readonly plannedActivities?: readonly string[]
   readonly notes?: string
   readonly privateNotes?: string
   readonly cancellationReason?: string
@@ -60,10 +66,10 @@ export interface CheckinData {
 }
 
 export interface CheckoutData {
-  readonly activities: string[]
+  readonly activities: readonly string[]
   readonly notes?: string
   readonly vitals?: Record<string, unknown>
-  readonly medications?: string[]
+  readonly medications?: readonly string[]
   readonly followUpRequired?: boolean
   readonly followUpReason?: string
   readonly clientCondition?: string
@@ -348,7 +354,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       })
 
       if (!visit) {
-        throw new NotFoundError('Visit not found')
+        throw new NotFoundError(VISIT_NOT_FOUND_MESSAGE)
       }
 
       // Verify worker is assigned to this visit
@@ -434,7 +440,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       })
 
       if (!visit) {
-        throw new NotFoundError('Visit not found')
+        throw new NotFoundError(VISIT_NOT_FOUND_MESSAGE)
       }
 
       // Verify worker is assigned to this visit
@@ -564,7 +570,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       })
 
       if (!visit) {
-        throw new NotFoundError('Visit not found')
+        throw new NotFoundError(VISIT_NOT_FOUND_MESSAGE)
       }
 
       // Check if visit can be rescheduled
@@ -790,7 +796,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     }
   }
 
-  async findOverdueVisits(userId?: string): Promise<VisitWithRelations[]> {
+  async findOverdueVisits(userId?: string): Promise<readonly VisitWithRelations[]> {
     const visits = await this.prisma.visit.findMany({
       where: {
         status: { in: ['SCHEDULED', 'CONFIRMED'] },
@@ -835,6 +841,6 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       })
     }
 
-    return visits as VisitWithRelations[]
+    return visits as readonly VisitWithRelations[]
   }
 }

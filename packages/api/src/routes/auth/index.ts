@@ -1,4 +1,5 @@
-import { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync } from 'fastify'
+
 import {
   loginRequestSchema,
   loginResponseSchema,
@@ -11,14 +12,12 @@ import {
   changePasswordSchema,
   currentUserResponseSchema,
   logoutResponseSchema,
-  verifyEmailSchema,
-  resendVerificationSchema
+  verifyEmailSchema
 } from '../../schemas/auth.js'
 import {
   AuthenticationError,
   ValidationError,
-  ConflictError,
-  BusinessRuleError
+  ConflictError
 } from '../../utils/errors.js'
 
 const auth: FastifyPluginAsync = async (fastify, _opts) => {

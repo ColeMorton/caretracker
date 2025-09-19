@@ -1,6 +1,10 @@
-import { User, Profile, PrismaClient } from '@caretracker/database'
-import { BaseRepository, AuditContext, PaginatedResult } from './base.repository.js'
+import type { User, Profile, PrismaClient } from '@caretracker/database'
+
 import { NotFoundError, ConflictError } from '../utils/errors.js'
+
+import type { AuditContext, PaginatedResult } from './base.repository.js';
+import { BaseRepository } from './base.repository.js'
+
 
 export interface UserWithProfile extends User {
   readonly profile?: Profile | null
@@ -43,9 +47,9 @@ export interface CreateUserData {
     readonly emergencyContactPhone?: string
     readonly emergencyContactRelation?: string
     readonly emergencyContactAddress?: string
-    readonly allergies?: string[]
-    readonly medications?: string[]
-    readonly medicalConditions?: string[]
+    readonly allergies?: readonly string[]
+    readonly medications?: readonly string[]
+    readonly medicalConditions?: readonly string[]
     readonly specialNeeds?: string
     readonly preferredLanguage?: string
     readonly timezone?: string
@@ -228,19 +232,16 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       })
 
       // Create profile if provided
-      let profile = null
-      if (data.profile) {
-        profile = await tx.profile.create({
-          data: {
-            userId: user.id,
-            ...data.profile,
-            dateOfBirth: data.profile.dateOfBirth || undefined,
-            createdBy: createdByUserId,
-            updatedBy: createdByUserId,
-            version: 1
-          }
-        })
-      }
+      const profile = data.profile ? await tx.profile.create({
+        data: {
+          userId: user.id,
+          ...data.profile,
+          dateOfBirth: data.profile.dateOfBirth || undefined,
+          createdBy: createdByUserId,
+          updatedBy: createdByUserId,
+          version: 1
+        }
+      }) : null
 
       // Log audit event
       if (this.auditLogger) {
@@ -303,29 +304,31 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       })
 
       // Update profile if provided and exists
-      let updatedProfile = currentUser.profile
-      if (data.profile && currentUser.profile) {
-        updatedProfile = await tx.profile.update({
-          where: { userId: id },
-          data: {
-            ...data.profile,
-            updatedBy: updatedByUserId,
-            version: currentUser.profile.version + 1,
-            updatedAt: new Date()
-          }
-        })
-      } else if (data.profile && !currentUser.profile) {
-        // Create profile if it doesn't exist
-        updatedProfile = await tx.profile.create({
-          data: {
-            userId: id,
-            ...data.profile,
-            createdBy: updatedByUserId,
-            updatedBy: updatedByUserId,
-            version: 1
-          }
-        })
-      }
+      const updatedProfile = await (async () => {
+        if (data.profile && currentUser.profile) {
+          return await tx.profile.update({
+            where: { userId: id },
+            data: {
+              ...data.profile,
+              updatedBy: updatedByUserId,
+              version: currentUser.profile.version + 1,
+              updatedAt: new Date()
+            }
+          })
+        } else if (data.profile && !currentUser.profile) {
+          // Create profile if it doesn't exist
+          return await tx.profile.create({
+            data: {
+              userId: id,
+              ...data.profile,
+              createdBy: updatedByUserId,
+              updatedBy: updatedByUserId,
+              version: 1
+            }
+          })
+        }
+        return currentUser.profile
+      })()
 
       // Log audit event
       if (this.auditLogger) {
@@ -343,7 +346,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
     })
   }
 
-  async findWorkersByClient(clientId: string, userId?: string): Promise<UserWithProfile[]> {
+  async findWorkersByClient(clientId: string, userId?: string): Promise<readonly UserWithProfile[]> {
     try {
       // Find workers assigned to this client through visits
       const workers = await this.prisma.user.findMany({
@@ -373,14 +376,14 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
         })
       }
 
-      return workers as UserWithProfile[]
+      return workers as readonly UserWithProfile[]
 
     } catch (error) {
       throw new NotFoundError('Workers not found for client')
     }
   }
 
-  async findClientsByWorker(workerId: string, userId?: string): Promise<UserWithProfile[]> {
+  async findClientsByWorker(workerId: string, userId?: string): Promise<readonly UserWithProfile[]> {
     try {
       // Find clients assigned to this worker through visits
       const clients = await this.prisma.user.findMany({
@@ -410,14 +413,14 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
         })
       }
 
-      return clients as UserWithProfile[]
+      return clients as readonly UserWithProfile[]
 
     } catch (error) {
       throw new NotFoundError('Clients not found for worker')
     }
   }
 
-  async findBySupervisor(supervisorId: string, userId?: string): Promise<UserWithProfile[]> {
+  async findBySupervisor(supervisorId: string, userId?: string): Promise<readonly UserWithProfile[]> {
     try {
       const workers = await this.prisma.user.findMany({
         where: {
@@ -440,7 +443,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
         })
       }
 
-      return workers as UserWithProfile[]
+      return workers as readonly UserWithProfile[]
 
     } catch (error) {
       throw new NotFoundError('Workers not found for supervisor')
@@ -455,7 +458,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       })
     } catch (error) {
       // Don't throw error for login timestamp update failures
-      console.warn(`Failed to update last login for user ${userId}:`, error)
+      // Silently continue - login timestamp is non-critical
     }
   }
 
@@ -470,7 +473,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       })
     } catch (error) {
       // Don't throw error for login attempt tracking failures
-      console.warn(`Failed to update login attempts for user ${userId}:`, error)
+      // Silently continue - login attempt tracking is non-critical
     }
   }
 }

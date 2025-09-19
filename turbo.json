@@ -18,26 +18,26 @@
       "dependsOn": ["^build", "database:generate"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "database:generate"],
       "outputs": ["coverage/**"],
       "cache": false
     },
     "test:unit": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "database:generate"],
       "outputs": ["coverage/**"],
       "cache": false
     },
     "test:integration": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "database:generate"],
       "outputs": ["coverage/**"],
       "cache": false
     },
     "test:e2e": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "database:generate"],
       "cache": false
     },
     "test:coverage": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "database:generate"],
       "outputs": ["coverage/**"],
       "cache": false
     },

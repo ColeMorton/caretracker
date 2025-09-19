@@ -1,12 +1,9 @@
-import { FastifyInstance } from 'fastify'
+import type { User, PrismaClient } from '@caretracker/database'
 import bcrypt from 'bcryptjs'
-import { User, PrismaClient } from '@caretracker/database'
+import type { FastifyInstance } from 'fastify'
+
 import {
-  AuthenticationError,
-  AuthorizationError,
-  ValidationError,
-  BusinessRuleError,
-  ErrorCode
+  AuthenticationError
 } from '../utils/errors.js'
 
 export interface JWTPayload {
@@ -45,7 +42,7 @@ export interface LoginCredentials {
 }
 
 // Role-based permissions system
-const PERMISSIONS = {
+const _PERMISSIONS = {
   // Client permissions
   'visits:read:own': 'Read own visit data',
   'profile:update:own': 'Update own profile',
@@ -387,7 +384,16 @@ export class AuthService {
     return `session_${Date.now()}_${Math.random().toString(36).substring(2)}`
   }
 
-  private sanitizeUser(user: User & { profile?: any }) {
+  private sanitizeUser(user: User & { readonly profile?: { readonly firstName: string; readonly lastName: string; readonly phone?: string | null } | null }): {
+    readonly id: string
+    readonly email: string
+    readonly role: string
+    readonly profile?: {
+      readonly firstName: string
+      readonly lastName: string
+      readonly phone?: string | null
+    }
+  } {
     return {
       id: user.id,
       email: user.email,

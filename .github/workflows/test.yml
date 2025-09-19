@@ -71,6 +71,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm database:generate
+
       - name: Run unit tests
         run: pnpm test:unit
         timeout-minutes: 10
