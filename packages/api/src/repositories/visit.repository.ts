@@ -2,7 +2,7 @@ import type { Visit, User, CarePlan, PrismaClient, VisitStatus } from '@caretrac
 
 import { NotFoundError, BusinessRuleError, ConflictError } from '../utils/errors.js'
 
-import type { AuditContext, PaginatedResult } from './base.repository.js';
+import type { AuditContext, PaginatedResult, CreateInput, PrismaTransactionClient } from './base.repository.js';
 import { BaseRepository } from './base.repository.js'
 
 const VISIT_NOT_FOUND_MESSAGE = 'Visit not found'
@@ -214,10 +214,10 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     )
   }
 
-  async create(data: CreateVisitData, createdByUserId: string): Promise<VisitWithRelations> {
-    return this.executeInTransaction(async (tx) => {
+  override async create(data: CreateInput<VisitWithRelations>, userId: string, _tx?: PrismaTransactionClient): Promise<VisitWithRelations> {
+    return this.executeInTransaction(async (transactionClient) => {
       // Validate client exists and is active
-      const client = await tx.user.findUnique({
+      const client = await transactionClient['user'].findUnique({
         where: { id: data.clientId, role: 'CLIENT', isActive: true, deletedAt: null }
       })
 
@@ -226,7 +226,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       }
 
       // Validate worker exists and is active
-      const worker = await tx.user.findUnique({
+      const worker = await transactionClient['user'].findUnique({
         where: { id: data.workerId, role: 'WORKER', isActive: true, deletedAt: null }
       })
 
@@ -235,7 +235,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       }
 
       // Check for worker scheduling conflicts
-      const conflictingVisit = await tx.visit.findFirst({
+      const conflictingVisit = await transactionClient['visit'].findFirst({
         where: {
           workerId: data.workerId,
           status: {
@@ -257,7 +257,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
 
       // Validate care plan if provided
       if (data.carePlanId) {
-        const carePlan = await tx.carePlan.findUnique({
+        const carePlan = await transactionClient['carePlan'].findUnique({
           where: { id: data.carePlanId, clientId: data.clientId, deletedAt: null }
         })
 
@@ -271,7 +271,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
         new Date(data.scheduledAt.getTime() + (data.duration || 60) * 60000)
 
       // Create visit
-      const visit = await tx.visit.create({
+      const visit = await transactionClient['visit'].create({
         data: {
           clientId: data.clientId,
           workerId: data.workerId,
@@ -286,8 +286,8 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
           privateNotes: data.privateNotes,
           carePlanId: data.carePlanId,
           status: 'SCHEDULED',
-          createdBy: createdByUserId,
-          updatedBy: createdByUserId,
+          createdBy: userId,
+          updatedBy: userId,
           version: 1
         },
         include: {
@@ -326,7 +326,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       // Log audit event
       if (this.auditLogger) {
         await this.auditLogger({
-          userId: createdByUserId,
+          userId: userId,
           action: 'CREATE',
           entityType: this.entityName,
           entityId: visit.id,
@@ -345,7 +345,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     userId: string
   ): Promise<VisitWithRelations> {
     return this.executeInTransaction(async (tx) => {
-      const visit = await tx.visit.findUnique({
+      const visit = await tx['visit'].findUnique({
         where: { id: visitId, deletedAt: null },
         include: {
           client: { include: { profile: true } },
@@ -368,7 +368,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       }
 
       // Update visit with check-in data
-      const updatedVisit = await tx.visit.update({
+      const updatedVisit = await tx['visit'].update({
         where: { id: visitId, version: visit.version },
         data: {
           status: 'IN_PROGRESS',
@@ -435,7 +435,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     userId: string
   ): Promise<VisitWithRelations> {
     return this.executeInTransaction(async (tx) => {
-      const visit = await tx.visit.findUnique({
+      const visit = await tx['visit'].findUnique({
         where: { id: visitId, deletedAt: null }
       })
 
@@ -460,7 +460,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
         : undefined
 
       // Update visit with checkout data
-      const updatedVisit = await tx.visit.update({
+      const updatedVisit = await tx['visit'].update({
         where: { id: visitId, version: visit.version },
         data: {
           status: 'COMPLETED',
@@ -565,7 +565,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     userId: string
   ): Promise<VisitWithRelations> {
     return this.executeInTransaction(async (tx) => {
-      const visit = await tx.visit.findUnique({
+      const visit = await tx['visit'].findUnique({
         where: { id: visitId, deletedAt: null }
       })
 
@@ -579,7 +579,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       }
 
       // Check for worker conflicts at new time
-      const conflictingVisit = await tx.visit.findFirst({
+      const conflictingVisit = await tx['visit'].findFirst({
         where: {
           workerId: visit.workerId,
           status: {
@@ -603,7 +603,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       }
 
       // Create new visit record for the rescheduled appointment
-      const rescheduledVisit = await tx.visit.create({
+      const rescheduledVisit = await tx['visit'].create({
         data: {
           clientId: visit.clientId,
           workerId: visit.workerId,
@@ -657,7 +657,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       })
 
       // Update original visit to cancelled
-      await tx.visit.update({
+      await tx['visit'].update({
         where: { id: visitId },
         data: {
           status: 'RESCHEDULED',
@@ -703,20 +703,20 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     }
 
     if (clientId) {
-      where.clientId = clientId
+      where['clientId'] = clientId
     }
 
     if (workerId) {
-      where.workerId = workerId
+      where['workerId'] = workerId
     }
 
     if (dateFrom || dateTo) {
-      where.scheduledAt = {}
+      where['scheduledAt'] = {}
       if (dateFrom) {
-        where.scheduledAt.gte = dateFrom
+        ;(where['scheduledAt'] as Record<string, unknown>)['gte'] = dateFrom
       }
       if (dateTo) {
-        where.scheduledAt.lte = dateTo
+        ;(where['scheduledAt'] as Record<string, unknown>)['lte'] = dateTo
       }
     }
 
@@ -784,16 +784,25 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       })
     }
 
-    return {
+    const baseStatistics = {
       totalVisits,
       completedVisits,
       cancelledVisits,
       upcomingVisits,
       overdueVisits,
-      averageDuration: averageStats._avg.actualDuration || undefined,
-      averageSatisfaction: averageStats._avg.clientSatisfaction || undefined,
       completionRate
     }
+
+    const averageDuration = averageStats._avg.actualDuration !== null ? averageStats._avg.actualDuration : undefined
+    const averageSatisfaction = averageStats._avg.clientSatisfaction !== null ? averageStats._avg.clientSatisfaction : undefined
+
+    const statistics: VisitStatistics = {
+      ...baseStatistics,
+      ...(averageDuration !== undefined && { averageDuration }),
+      ...(averageSatisfaction !== undefined && { averageSatisfaction })
+    }
+
+    return statistics
   }
 
   async findOverdueVisits(userId?: string): Promise<readonly VisitWithRelations[]> {

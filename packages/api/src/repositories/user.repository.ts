@@ -199,7 +199,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
   async createWithProfile(data: CreateUserData, createdByUserId: string): Promise<UserWithProfile> {
     return this.executeInTransaction(async (tx) => {
       // Check for email uniqueness
-      const existingUser = await tx.user.findUnique({
+      const existingUser = await tx['user'].findUnique({
         where: { email: data.email }
       })
 
@@ -209,7 +209,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
 
       // Check for medical record number uniqueness if provided
       if (data.profile?.medicalRecordNumber) {
-        const existingMRN = await tx.profile.findUnique({
+        const existingMRN = await tx['profile'].findUnique({
           where: { medicalRecordNumber: data.profile.medicalRecordNumber }
         })
 
@@ -219,7 +219,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       }
 
       // Create user
-      const user = await tx.user.create({
+      const user = await tx['user'].create({
         data: {
           email: data.email,
           password: data.password,
@@ -232,7 +232,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       })
 
       // Create profile if provided
-      const profile = data.profile ? await tx.profile.create({
+      const profile = data.profile ? await tx['profile'].create({
         data: {
           userId: user.id,
           ...data.profile,
@@ -265,7 +265,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
   ): Promise<UserWithProfile> {
     return this.executeInTransaction(async (tx) => {
       // Get current user for optimistic locking
-      const currentUser = await tx.user.findUnique({
+      const currentUser = await tx['user'].findUnique({
         where: { id, deletedAt: null },
         include: { profile: true }
       })
@@ -276,7 +276,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
 
       // Check email uniqueness if changing email
       if (data.email && data.email !== currentUser.email) {
-        const existingUser = await tx.user.findUnique({
+        const existingUser = await tx['user'].findUnique({
           where: { email: data.email }
         })
 
@@ -286,7 +286,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       }
 
       // Update user
-      const updatedUser = await tx.user.update({
+      const updatedUser = await tx['user'].update({
         where: {
           id,
           version: currentUser.version
@@ -306,7 +306,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       // Update profile if provided and exists
       const updatedProfile = await (async () => {
         if (data.profile && currentUser.profile) {
-          return await tx.profile.update({
+          return await tx['profile'].update({
             where: { userId: id },
             data: {
               ...data.profile,
@@ -317,7 +317,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
           })
         } else if (data.profile && !currentUser.profile) {
           // Create profile if it doesn't exist
-          return await tx.profile.create({
+          return await tx['profile'].create({
             data: {
               userId: id,
               ...data.profile,
@@ -338,7 +338,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
           entityType: this.entityName,
           entityId: id,
           oldValues: currentUser,
-          newValues: data
+          newValues: data as Record<string, unknown>
         })
       }
 
@@ -464,12 +464,17 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
 
   async updateLoginAttempts(userId: string, attempts: number, lockedUntil?: Date): Promise<void> {
     try {
+      const updateData: { loginAttempts: number; lockedUntil?: Date } = {
+        loginAttempts: attempts,
+      }
+
+      if (lockedUntil) {
+        updateData.lockedUntil = lockedUntil
+      }
+
       await this.prisma.user.update({
         where: { id: userId },
-        data: {
-          loginAttempts: attempts,
-          lockedUntil
-        }
+        data: updateData
       })
     } catch (error) {
       // Don't throw error for login attempt tracking failures

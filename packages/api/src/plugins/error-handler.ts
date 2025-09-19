@@ -16,17 +16,7 @@ interface ErrorResponse {
   }
 }
 
-interface User {
-  readonly id: string
-  readonly email: string
-  readonly role: string
-}
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    readonly user?: User
-  }
-}
+// User payload interface for request.user (from @fastify/jwt)
 
 const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
   // Helper function to create error response
@@ -73,7 +63,7 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
   const handlePrismaError = (error: Prisma.PrismaClientKnownRequestError): AppError => {
     switch (error.code) {
       case 'P2002': {
-        const target = error.meta?.target as readonly string[] | undefined
+        const target = error.meta?.['target'] as readonly string[] | undefined
         const field = target?.[0] || 'field'
         return new ValidationError(`${field} already exists`, {
           field,
@@ -100,7 +90,7 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
         field: err.path.join('.'),
         code: err.code,
         message: err.message,
-        value: err.input
+        value: 'received' in err ? err.received : undefined
       }))
     )
   }
@@ -142,16 +132,16 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
       return reply.status(appError.statusCode).send(errorResponse)
     }
 
-    if (error.validation) {
+    if ('validation' in error && error.validation) {
       const validationError = new ValidationError('Request validation failed', {
-        field: error.validationContext,
+        field: 'validationContext' in error ? String(error.validationContext) : 'unknown',
         message: error.message
       })
       const errorResponse = createErrorResponse(validationError, requestId, timestamp)
       return reply.status(400).send(errorResponse)
     }
 
-    if (error.statusCode === 429) {
+    if ('statusCode' in error && error.statusCode === 429) {
       const rateLimitError = new AppError(
         ErrorCode.RATE_LIMIT_EXCEEDED,
         'Too many requests. Please try again later.',

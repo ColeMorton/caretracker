@@ -30,7 +30,7 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
     await prisma.$connect()
     fastify.log.info('✅ Database connected successfully')
   } catch (error) {
-    fastify.log.error('❌ Database connection failed:', error)
+    fastify.log.error(error, '❌ Database connection failed')
     throw error
   }
 
@@ -47,11 +47,11 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('checkDatabaseHealth', async () => {
     try {
       await prisma.$queryRaw`SELECT 1`
-      return { status: 'healthy', timestamp: new Date() }
+      return { status: 'healthy' as const, timestamp: new Date() }
     } catch (error) {
-      fastify.log.error('Database health check failed:', error)
+      fastify.log.error(error, 'Database health check failed')
       return {
-        status: 'unhealthy',
+        status: 'unhealthy' as const,
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date()
       }

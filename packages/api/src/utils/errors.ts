@@ -42,7 +42,7 @@ export class AppError extends Error {
 
   constructor(
     public readonly code: ErrorCode,
-    public readonly message: string,
+    public override readonly message: string,
     public readonly statusCode: number,
     public readonly details?: ErrorDetails | readonly ErrorDetails[]
   ) {
@@ -63,7 +63,7 @@ export class AppError extends Error {
       code: this.code,
       message: this.message,
       statusCode: this.statusCode,
-      details: this.details,
+      ...(this.details && { details: this.details as Record<string, unknown> }),
       timestamp: this.timestamp.toISOString()
     }
   }

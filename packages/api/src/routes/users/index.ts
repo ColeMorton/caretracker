@@ -1,6 +1,6 @@
 import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
 
-import { UserRepository } from '../../repositories/user.repository.js'
+import { UserRepository, type UserFilters } from '../../repositories/user.repository.js'
 import {
   getUsersQuerySchema,
   getUsersResponseSchema,
@@ -62,7 +62,7 @@ const formatUserResponse = (user: Record<string, unknown>): Record<string, unkno
   lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt as string).toISOString() : null,
   createdAt: new Date(user.createdAt as string).toISOString(),
   updatedAt: new Date(user.updatedAt as string).toISOString(),
-  profile: formatProfileData(user.profile as Record<string, unknown> | null | undefined)
+  profile: formatProfileData(user['profile'] as Record<string, unknown> | null | undefined)
 })
 
 const users: FastifyPluginAsync = async (fastify, _opts) => {
@@ -91,13 +91,22 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
     const { page = 1, limit = 10, ...filters } = query
 
     // Role-based filtering: non-admins can only see active users
-    const userFilters = {
-      ...filters,
+    const userFilters: UserFilters = {
       ...(request.user!.role !== 'ADMIN' && { isActive: true })
     }
 
+    // Only include defined filter properties
+    const userFiltersWithConditionals = {
+      ...userFilters,
+      ...(filters.role && { role: filters.role }),
+      ...(typeof filters.isActive === 'boolean' && { isActive: filters.isActive }),
+      ...(typeof filters.emailVerified === 'boolean' && { emailVerified: filters.emailVerified }),
+      ...(filters.supervisorId && { supervisorId: filters.supervisorId }),
+      ...(filters.search && { search: filters.search }),
+    }
+
     const result = await userRepository.findActiveUsers(
-      userFilters,
+      userFiltersWithConditionals,
       page,
       limit,
       request.user!.id
@@ -155,7 +164,7 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
 
     return reply.status(200).send({
       success: true,
-      data: formatUserResponse(user)
+      data: formatUserResponse(user as any)
     })
   })
 
@@ -221,11 +230,26 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
     }
   }, async (request, reply) => {
     const { id } = getUserByIdParamsSchema.parse(request.params)
-    const updateData = updateUserRequestSchema.parse(request.body)
+    const rawUpdateData = updateUserRequestSchema.parse(request.body)
 
     // Check ownership: users can only update their own data unless they're admin/supervisor
     if (!['ADMIN', 'SUPERVISOR'].includes(request.user!.role) && request.user!.id !== id) {
       throw new AuthorizationError('Cannot update other user data')
+    }
+
+    // Clean undefined values from update data
+    const updateData: any = {
+      ...(rawUpdateData.email && { email: rawUpdateData.email }),
+      ...(rawUpdateData.role && { role: rawUpdateData.role }),
+      ...(typeof rawUpdateData.isActive === 'boolean' && { isActive: rawUpdateData.isActive }),
+    }
+    if (rawUpdateData.profile) {
+      updateData.profile = {}
+      Object.entries(rawUpdateData.profile).forEach(([key, value]) => {
+        if (value !== undefined) {
+          updateData.profile[key] = value
+        }
+      })
     }
 
     const user = await userRepository.updateWithProfile(id, updateData, request.user!.id)

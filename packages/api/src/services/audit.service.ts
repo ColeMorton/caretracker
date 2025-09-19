@@ -56,24 +56,28 @@ export class AuditService {
         return
       }
 
+      const auditData: any = {
+        userId: entry.userId,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        action: entry.action,
+        approvalRequired: entry.approvalRequired || false,
+      }
+
+      // Only include optional fields if they have values
+      if (entry.oldValues) auditData.oldValues = entry.oldValues
+      if (entry.newValues) auditData.newValues = entry.newValues
+      if (entry.ipAddress) auditData.ipAddress = entry.ipAddress
+      if (entry.userAgent) auditData.userAgent = entry.userAgent
+      if (entry.sessionId) auditData.sessionId = entry.sessionId
+      if (entry.requestId) auditData.requestId = entry.requestId
+      if (entry.endpoint) auditData.endpoint = entry.endpoint
+      if (entry.reason) auditData.reason = entry.reason
+      if (entry.approvedBy) auditData.approvedBy = entry.approvedBy
+      if (entry.dataAccessed) auditData.dataAccessed = entry.dataAccessed
+
       await this.prisma.auditLog.create({
-        data: {
-          userId: entry.userId,
-          entityType: entry.entityType,
-          entityId: entry.entityId,
-          action: entry.action,
-          oldValues: entry.oldValues,
-          newValues: entry.newValues,
-          ipAddress: entry.ipAddress,
-          userAgent: entry.userAgent,
-          sessionId: entry.sessionId,
-          requestId: entry.requestId,
-          endpoint: entry.endpoint,
-          reason: entry.reason,
-          approvalRequired: entry.approvalRequired || false,
-          approvedBy: entry.approvedBy,
-          dataAccessed: entry.dataAccessed,
-        },
+        data: auditData,
       })
 
       // Log to application logger for real-time monitoring
@@ -115,7 +119,7 @@ export class AuditService {
     userAgent?: string,
     reason?: string
   ): Promise<void> {
-    await this.logEvent({
+    const entry: AuditLogEntry = {
       userId,
       entityType: 'Authentication',
       entityId: userId,
@@ -124,11 +128,13 @@ export class AuditService {
         authAction: action,
         timestamp: new Date().toISOString(),
       },
-      ipAddress,
-      userAgent,
-      reason,
       dataAccessed: 'PII',
-    })
+      ...(ipAddress && { ipAddress }),
+      ...(userAgent && { userAgent }),
+      ...(reason && { reason }),
+    }
+
+    await this.logEvent(entry)
   }
 
   async logUnauthorizedAccess(
@@ -138,22 +144,26 @@ export class AuditService {
     userAgent?: string,
     endpoint?: string
   ): Promise<void> {
-    await this.logEvent({
-      userId,
+    const newValues: Record<string, unknown> = {
+      violationType: 'UNAUTHORIZED_ACCESS',
+      timestamp: new Date().toISOString(),
+      ...(permission && { permission }),
+      ...(endpoint && { endpoint }),
+    }
+
+    const entry: AuditLogEntry = {
       entityType: 'SecurityViolation',
       entityId: `unauthorized_${Date.now()}`,
       action: 'READ',
-      newValues: {
-        violationType: 'UNAUTHORIZED_ACCESS',
-        permission,
-        endpoint,
-        timestamp: new Date().toISOString(),
-      },
-      ipAddress,
-      userAgent,
-      endpoint,
+      newValues,
       dataAccessed: 'INTERNAL',
-    })
+      ...(userId && { userId }),
+      ...(ipAddress && { ipAddress }),
+      ...(userAgent && { userAgent }),
+      ...(endpoint && { endpoint }),
+    }
+
+    await this.logEvent(entry)
 
     // Log security event at higher level
     this.fastify.log.warn(
@@ -182,16 +192,18 @@ export class AuditService {
   ): Promise<void> {
     // Only log PHI and PII access to reduce noise
     if (['PHI', 'PII'].includes(dataClassification)) {
-      await this.logEvent({
+      const entry: AuditLogEntry = {
         userId,
         entityType,
         entityId,
         action: 'READ',
-        reason,
-        ipAddress,
-        userAgent,
         dataAccessed: dataClassification,
-      })
+        ...(reason && { reason }),
+        ...(ipAddress && { ipAddress }),
+        ...(userAgent && { userAgent }),
+      }
+
+      await this.logEvent(entry)
     }
   }
 
@@ -205,14 +217,16 @@ export class AuditService {
     // Sanitize sensitive data from audit logs
     const sanitizedData = this.sanitizeAuditData(data)
 
-    await this.logEvent({
+    const entry: AuditLogEntry = {
       userId,
       entityType,
       entityId,
       action: 'CREATE',
       newValues: sanitizedData,
-      dataAccessed: dataClassification,
-    })
+      ...(dataClassification && { dataAccessed: dataClassification }),
+    }
+
+    await this.logEvent(entry)
   }
 
   async logEntityUpdate(
@@ -227,15 +241,17 @@ export class AuditService {
     const sanitizedNewData = this.sanitizeAuditData(newData)
     const sanitizedOldData = this.sanitizeAuditData(oldData)
 
-    await this.logEvent({
+    const entry: AuditLogEntry = {
       userId,
       entityType,
       entityId,
       action: 'UPDATE',
       oldValues: sanitizedOldData,
       newValues: sanitizedNewData,
-      dataAccessed: dataClassification,
-    })
+      ...(dataClassification && { dataAccessed: dataClassification }),
+    }
+
+    await this.logEvent(entry)
   }
 
   async logEntityDeletion(
@@ -248,15 +264,17 @@ export class AuditService {
   ): Promise<void> {
     const sanitizedOldData = this.sanitizeAuditData(oldData)
 
-    await this.logEvent({
+    const entry: AuditLogEntry = {
       userId,
       entityType,
       entityId,
       action: 'DELETE',
       oldValues: sanitizedOldData,
-      reason,
-      dataAccessed: dataClassification,
-    })
+      ...(reason && { reason }),
+      ...(dataClassification && { dataAccessed: dataClassification }),
+    }
+
+    await this.logEvent(entry)
   }
 
   async queryAuditLogs(query: AuditQuery): Promise<{
@@ -517,15 +535,15 @@ export class AuditService {
     const where: Record<string, unknown> = {}
 
     if (userId) {
-      where.userId = userId
+      where['userId'] = userId
     }
 
     if (entityType) {
-      where.entityType = entityType
+      where['entityType'] = entityType
     }
 
     if (entityId) {
-      where.entityId = entityId
+      where['entityId'] = entityId
     }
 
     if (action) {

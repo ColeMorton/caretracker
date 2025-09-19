@@ -19,8 +19,8 @@ import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
 // Helper function to validate visit access permissions
 const validateVisitAccess = (user: NonNullable<FastifyRequest['user']>, visit: Record<string, unknown>): undefined => {
   const hasAdminPrivileges = ['ADMIN', 'SUPERVISOR'].includes(user.role)
-  const isClientOwner = visit.clientId === user.id
-  const isAssignedWorker = visit.workerId === user.id
+  const isClientOwner = visit['clientId'] === user.id
+  const isAssignedWorker = visit['workerId'] === user.id
 
   const canAccess = hasAdminPrivileges || isClientOwner || isAssignedWorker
 
@@ -35,33 +35,33 @@ const formatUserProfile = (user: Record<string, unknown> | null | undefined): Re
   if (!user) return undefined
 
   return {
-    id: user.id,
-    email: user.email,
-    profile: user.profile ? {
-      firstName: (user.profile as Record<string, unknown>).firstName,
-      lastName: (user.profile as Record<string, unknown>).lastName,
-      phone: (user.profile as Record<string, unknown>).phone || undefined
+    id: user['id'],
+    email: user['email'],
+    profile: user['profile'] ? {
+      firstName: (user['profile'] as Record<string, unknown>)['firstName'],
+      lastName: (user['profile'] as Record<string, unknown>)['lastName'],
+      phone: (user['profile'] as Record<string, unknown>)['phone'] || undefined
     } : undefined
   }
 }
 
 // Helper function to format visit response
 const formatVisitResponse = (visit: Record<string, unknown>): Record<string, unknown> => ({
-  id: visit.id,
-  clientId: visit.clientId,
-  workerId: visit.workerId,
-  scheduledAt: new Date(visit.scheduledAt as string).toISOString(),
-  estimatedDuration: visit.estimatedDuration,
-  status: visit.status,
-  activities: visit.activities || [],
-  actualStartTime: visit.actualStartTime ? new Date(visit.actualStartTime as string).toISOString() : undefined,
-  actualEndTime: visit.actualEndTime ? new Date(visit.actualEndTime as string).toISOString() : undefined,
-  actualDuration: visit.actualDuration || undefined,
-  notes: visit.notes || undefined,
-  createdAt: new Date(visit.createdAt as string).toISOString(),
-  updatedAt: new Date(visit.updatedAt as string).toISOString(),
-  client: formatUserProfile(visit.client as Record<string, unknown> | null | undefined),
-  worker: formatUserProfile(visit.worker as Record<string, unknown> | null | undefined)
+  id: visit['id'],
+  clientId: visit['clientId'],
+  workerId: visit['workerId'],
+  scheduledAt: new Date(visit['scheduledAt'] as string).toISOString(),
+  estimatedDuration: visit['estimatedDuration'],
+  status: visit['status'],
+  activities: visit['activities'] || [],
+  actualStartTime: visit['actualStartAt'] ? new Date(visit['actualStartAt'] as string).toISOString() : undefined,
+  actualEndTime: visit['actualEndAt'] ? new Date(visit['actualEndAt'] as string).toISOString() : undefined,
+  actualDuration: visit['actualDuration'] || undefined,
+  notes: visit['notes'] || undefined,
+  createdAt: new Date(visit['createdAt'] as string).toISOString(),
+  updatedAt: new Date(visit['updatedAt'] as string).toISOString(),
+  client: formatUserProfile(visit['client'] as Record<string, unknown> | null | undefined),
+  worker: formatUserProfile(visit['worker'] as Record<string, unknown> | null | undefined)
 })
 
 const visits: FastifyPluginAsync = async (fastify, _opts) => {
@@ -101,25 +101,30 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     }
     // ADMIN and SUPERVISOR can see all visits based on filters
 
-    const result = await visitRepository.findWithFilters(
-      visitFilters,
+    const result = await visitRepository.findManyPaginated(
       page,
       limit,
+      visitFilters,
+      { createdAt: 'desc' },
+      {
+        client: { include: { profile: true } },
+        worker: { include: { profile: true } }
+      },
       request.user!.id
     )
 
     return reply.status(200).send({
       success: true,
-      data: result.data.map(visit => ({
+      data: result.data.map((visit: any) => ({
         id: visit.id,
         clientId: visit.clientId,
         workerId: visit.workerId,
         scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: visit.estimatedDuration,
+        estimatedDuration: (visit as any).estimatedDuration,
         status: visit.status,
         activities: visit.activities || [],
-        actualStartTime: visit.actualStartTime?.toISOString() || undefined,
-        actualEndTime: visit.actualEndTime?.toISOString() || undefined,
+        actualStartTime: visit.actualStartAt?.toISOString() || undefined,
+        actualEndTime: visit.actualEndAt?.toISOString() || undefined,
         actualDuration: visit.actualDuration || undefined,
         notes: visit.notes || undefined,
         createdAt: visit.createdAt.toISOString(),
@@ -164,11 +169,11 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
       throw new NotFoundError('Visit not found')
     }
 
-    validateVisitAccess(request.user!, visit)
+    validateVisitAccess(request.user!, visit as any)
 
     return reply.status(200).send({
       success: true,
-      data: formatVisitResponse(visit)
+      data: formatVisitResponse(visit as any)
     })
   })
 
@@ -190,7 +195,20 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
       }
     }
   }, async (request, reply) => {
-    const visitData = createVisitRequestSchema.parse(request.body)
+    const rawVisitData = createVisitRequestSchema.parse(request.body)
+
+    // Clean undefined values from visit data
+    const visitData: any = {
+      clientId: rawVisitData.clientId,
+      workerId: rawVisitData.workerId,
+      scheduledAt: rawVisitData.scheduledAt,
+      ...(rawVisitData.scheduledEndAt && { scheduledEndAt: rawVisitData.scheduledEndAt }),
+      ...(rawVisitData.duration && { duration: rawVisitData.duration }),
+      ...(rawVisitData.visitType && { visitType: rawVisitData.visitType }),
+      ...(rawVisitData.location && { location: rawVisitData.location }),
+      ...(rawVisitData.notes && { notes: rawVisitData.notes }),
+      ...(rawVisitData.activities && { activities: rawVisitData.activities }),
+    }
 
     const visit = await visitRepository.create(visitData, request.user!.id)
 
@@ -201,7 +219,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
         clientId: visit.clientId,
         workerId: visit.workerId,
         scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: visit.estimatedDuration,
+        estimatedDuration: (visit as any).estimatedDuration,
         status: visit.status,
         activities: visit.activities || [],
         createdAt: visit.createdAt.toISOString()
@@ -230,7 +248,20 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     }
   }, async (request, reply) => {
     const { id } = getVisitByIdParamsSchema.parse(request.params)
-    const updateData = updateVisitRequestSchema.parse(request.body)
+    const rawUpdateData = updateVisitRequestSchema.parse(request.body)
+
+    // Clean undefined values from update data
+    const updateData: any = {
+      ...(rawUpdateData.scheduledAt && { scheduledAt: rawUpdateData.scheduledAt }),
+      ...(rawUpdateData.scheduledEndAt && { scheduledEndAt: rawUpdateData.scheduledEndAt }),
+      ...(rawUpdateData.duration && { duration: rawUpdateData.duration }),
+      ...(rawUpdateData.status && { status: rawUpdateData.status }),
+      ...(rawUpdateData.visitType && { visitType: rawUpdateData.visitType }),
+      ...(rawUpdateData.location && { location: rawUpdateData.location }),
+      ...(rawUpdateData.notes && { notes: rawUpdateData.notes }),
+      ...(rawUpdateData.activities && { activities: rawUpdateData.activities }),
+      ...(rawUpdateData.cancellationReason && { cancellationReason: rawUpdateData.cancellationReason }),
+    }
 
     const visit = await visitRepository.update(id, updateData, request.user!.id)
 
@@ -241,7 +272,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
         clientId: visit.clientId,
         workerId: visit.workerId,
         scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: visit.estimatedDuration,
+        estimatedDuration: (visit as any).estimatedDuration,
         status: visit.status,
         activities: visit.activities || [],
         updatedAt: visit.updatedAt.toISOString()
@@ -286,14 +317,21 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     const { id } = getVisitByIdParamsSchema.parse(request.params)
     const checkinData = checkinRequestSchema.parse(request.body)
 
-    const visit = await visitRepository.checkin(id, request.user!.id, checkinData)
+    // Clean checkin data to ensure required fields
+    const cleanCheckinData = {
+      notes: checkinData.notes || '',
+      location: checkinData.location || '',
+      ...(checkinData.arrivalMethod && { arrivalMethod: checkinData.arrivalMethod }),
+    }
+
+    const visit = await visitRepository.checkin(id, request.user!.id, cleanCheckinData, request.user!.id)
 
     return reply.status(200).send({
       success: true,
       data: {
         id: visit.id,
         status: visit.status,
-        actualStartTime: visit.actualStartTime!.toISOString(),
+        actualStartTime: visit.actualStartAt!.toISOString(),
         message: 'Checked in successfully'
       }
     })
@@ -336,14 +374,24 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     const { id } = getVisitByIdParamsSchema.parse(request.params)
     const checkoutData = checkoutRequestSchema.parse(request.body)
 
-    const visit = await visitRepository.checkout(id, request.user!.id, checkoutData)
+    // Clean checkout data to ensure required fields
+    const cleanCheckoutData = {
+      ...checkoutData,
+      notes: checkoutData.notes || '',
+      ...(checkoutData.medications && { medications: checkoutData.medications }),
+      ...(checkoutData.vitals && { vitals: checkoutData.vitals }),
+      ...(checkoutData.followUpReason && { followUpReason: checkoutData.followUpReason }),
+      ...(checkoutData.incidentDetails && { incidentDetails: checkoutData.incidentDetails }),
+    }
+
+    const visit = await visitRepository.checkout(id, request.user!.id, cleanCheckoutData, request.user!.id)
 
     return reply.status(200).send({
       success: true,
       data: {
         id: visit.id,
         status: visit.status,
-        actualEndTime: visit.actualEndTime!.toISOString(),
+        actualEndTime: visit.actualEndAt!.toISOString(),
         actualDuration: visit.actualDuration!,
         message: 'Checked out successfully'
       }
@@ -387,9 +435,10 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
 
     const visit = await visitRepository.reschedule(
       id,
-      rescheduleData.newScheduledAt,
-      request.user!.id,
-      rescheduleData.reason
+      new Date(rescheduleData.newScheduledAt),
+      new Date(rescheduleData.newScheduledAt), // Using same time for end - can be enhanced later
+      rescheduleData.reason || 'Rescheduled by user',
+      request.user!.id
     )
 
     return reply.status(200).send({

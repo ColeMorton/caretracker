@@ -18,11 +18,14 @@ interface UserPayload {
 declare module 'fastify' {
   interface FastifyInstance {
     readonly authService: AuthService
-    readonly authenticate: preHandlerHookHandler
+    readonly authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
     readonly authorize: (permissions: readonly string[]) => preHandlerHookHandler
     readonly requirePermission: (permission: string) => preHandlerHookHandler
     readonly requireRole: (...roles: readonly string[]) => preHandlerHookHandler
     readonly requireOwnership: (resourceParam?: string) => preHandlerHookHandler
+    readonly optionalAuth: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
+    readonly hasPermission: (request: FastifyRequest, permission: string) => boolean
+    readonly hasRole: (request: FastifyRequest, ...roles: readonly string[]) => boolean
   }
 }
 
@@ -34,8 +37,8 @@ declare module '@fastify/jwt' {
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
-  // Register JWT plugin
-  await fastify.register(fastifyJwt, {
+  // Register JWT plugin with proper typing
+  await fastify.register(fastifyJwt as any, {
     secret: process.env['JWT_SECRET'] || 'fallback-secret-for-development',
     sign: {
       algorithm: 'HS256',
@@ -54,7 +57,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('authService', authService)
 
   // Authentication hook - verifies JWT token
-  const authenticate: preHandlerHookHandler = async (request: FastifyRequest, _reply: FastifyReply) => {
+  const authenticate = async (request: FastifyRequest, _reply: FastifyReply) => {
     try {
       const authHeader = request.headers.authorization
 
@@ -348,9 +351,9 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('requireOwnership', requireOwnership)
 
   // Optional authentication hook (doesn't throw if no token)
-  const optionalAuth: preHandlerHookHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  const optionalAuth = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      await authenticate(request, reply, () => {})
+      await authenticate(request, reply)
     } catch (error) {
       // Silently continue without user context
       fastify.log.debug('Optional authentication failed - continuing without user context')

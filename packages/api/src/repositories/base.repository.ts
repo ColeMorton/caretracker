@@ -3,6 +3,8 @@ import type {
   PrismaTransactionClient,
 } from '@caretracker/database'
 
+export type { PrismaTransactionClient }
+
 import {
   OptimisticLockError,
   NotFoundError,
@@ -359,14 +361,26 @@ export abstract class BaseRepository<T extends AuditableEntity> {
 
       // Log audit event
       if (this.auditLogger) {
-        await this.auditLogger({
+        const auditData: {
+          userId: string
+          action: 'DELETE'
+          entityType: string
+          entityId: string
+          oldValues: any
+          reason?: string
+        } = {
           userId,
           action: 'DELETE',
           entityType: this.entityName,
           entityId: id,
           oldValues: currentEntity,
-          reason,
-        })
+        }
+
+        if (reason) {
+          auditData.reason = reason
+        }
+
+        await this.auditLogger(auditData)
       }
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -420,7 +434,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     callback: (tx: PrismaTransactionClient) => Promise<R>
   ): Promise<R> {
     try {
-      return await this.prisma.$transaction(callback)
+      return await this.prisma.$transaction(callback as any)
     } catch (error) {
       // Re-throw business logic errors unchanged
       if (error instanceof NotFoundError ||
