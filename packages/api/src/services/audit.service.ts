@@ -327,10 +327,10 @@ export class AuditService {
     if (dateFrom || dateTo) {
       where['createdAt'] = {}
       if (dateFrom) {
-        ;(where['createdAt'] as Record<string, unknown>).gte = dateFrom
+        ;(where['createdAt'] as Record<string, unknown>)['gte'] = dateFrom
       }
       if (dateTo) {
-        ;(where['createdAt'] as Record<string, unknown>).lte = dateTo
+        ;(where['createdAt'] as Record<string, unknown>)['lte'] = dateTo
       }
     }
 
@@ -539,10 +539,10 @@ export class AuditService {
     if (dateFrom || dateTo) {
       where['createdAt'] = {}
       if (dateFrom) {
-        ;(where['createdAt'] as Record<string, unknown>).gte = dateFrom
+        ;(where['createdAt'] as Record<string, unknown>)['gte'] = dateFrom
       }
       if (dateTo) {
-        ;(where['createdAt'] as Record<string, unknown>).lte = dateTo
+        ;(where['createdAt'] as Record<string, unknown>)['lte'] = dateTo
       }
     }
 

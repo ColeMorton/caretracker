@@ -20,7 +20,7 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
       : ['warn', 'error'],
     datasources: {
       db: {
-        url: process.env['DATABASE_URL']
+        url: process.env['DATABASE_URL'] || 'postgresql://localhost:5432/caretracker'
       }
     }
   })

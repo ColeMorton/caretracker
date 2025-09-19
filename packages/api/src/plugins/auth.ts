@@ -1,4 +1,4 @@
-import jwt from '@fastify/jwt'
+import fastifyJwt from '@fastify/jwt'
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify'
 import fp from 'fastify-plugin'
 
@@ -6,6 +6,14 @@ import { AuthService } from '../services/auth.service.js'
 import { AuthenticationError, AuthorizationError } from '../utils/errors.js'
 
 const AUTHENTICATION_REQUIRED_MESSAGE = 'Authentication required'
+
+interface UserPayload {
+  readonly id: string
+  readonly email: string
+  readonly role: string
+  readonly permissions: readonly string[]
+  readonly sessionId: string
+}
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -16,21 +24,18 @@ declare module 'fastify' {
     readonly requireRole: (...roles: readonly string[]) => preHandlerHookHandler
     readonly requireOwnership: (resourceParam?: string) => preHandlerHookHandler
   }
+}
 
-  interface FastifyRequest {
-    readonly user?: {
-      readonly id: string
-      readonly email: string
-      readonly role: string
-      readonly permissions: readonly string[]
-      readonly sessionId: string
-    }
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: UserPayload
+    user: UserPayload
   }
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   // Register JWT plugin
-  await fastify.register(jwt, {
+  await fastify.register(fastifyJwt, {
     secret: process.env['JWT_SECRET'] || 'fallback-secret-for-development',
     sign: {
       algorithm: 'HS256',
@@ -111,8 +116,8 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       if (!hasAnyPermission) {
         // Log unauthorized access attempt
         fastify.log.warn({
-          userId: request.user.id,
-          role: request.user.role,
+          userId: request.user!.id,
+          role: request.user!.role,
           requiredPermissions: permissions,
           url: request.url,
           method: request.method,
@@ -124,7 +129,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
       // Log successful authorization
       fastify.log.debug({
-        userId: request.user.id,
+        userId: request.user!.id,
         permissions,
         url: request.url
       }, 'Authorization check passed')
@@ -138,13 +143,13 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
-      const hasPermission = await authService.checkPermission(request.user.id, permission)
+      const hasPermission = await authService.checkPermission(request.user!.id, permission)
 
       if (!hasPermission) {
         // Log unauthorized access attempt
         fastify.log.warn({
-          userId: request.user.id,
-          role: request.user.role,
+          userId: request.user!.id,
+          role: request.user!.role,
           requiredPermission: permission,
           url: request.url,
           method: request.method,
@@ -156,7 +161,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
       // Log successful authorization
       fastify.log.debug({
-        userId: request.user.id,
+        userId: request.user!.id,
         permission,
         url: request.url
       }, 'Permission check passed')
@@ -170,11 +175,11 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
-      if (!allowedRoles.includes(request.user.role)) {
+      if (!allowedRoles.includes(request.user!.role)) {
         // Log unauthorized access attempt
         fastify.log.warn({
-          userId: request.user.id,
-          userRole: request.user.role,
+          userId: request.user!.id,
+          userRole: request.user!.role,
           allowedRoles,
           url: request.url,
           method: request.method,
@@ -185,8 +190,8 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       }
 
       fastify.log.debug({
-        userId: request.user.id,
-        role: request.user.role,
+        userId: request.user!.id,
+        role: request.user!.role,
         url: request.url
       }, 'Role check passed')
     }
@@ -199,7 +204,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
   // Helper function to validate resource access
   const validateResourceAccess = async (
-    user: NonNullable<FastifyRequest['user']>,
+    user: UserPayload,
     resourceId: string,
     url: string
   ): Promise<void> => {
@@ -242,7 +247,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
-      if (hasAdminPrivileges(request.user.role)) {
+      if (hasAdminPrivileges(request.user!.role)) {
         return
       }
 
@@ -261,10 +266,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         throw new AuthenticationError(`Resource parameter '${resourceParam}' is required`)
       }
 
-      await validateResourceAccess(request.user, resourceId, request.url)
+      await validateResourceAccess(request.user!, resourceId, request.url)
 
       fastify.log.debug({
-        userId: request.user.id,
+        userId: request.user!.id,
         resourceId,
         url: request.url
       }, 'Ownership check passed')
@@ -343,14 +348,16 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('requireOwnership', requireOwnership)
 
   // Optional authentication hook (doesn't throw if no token)
-  fastify.decorate('optionalAuth', async (request: FastifyRequest, reply: FastifyReply) => {
+  const optionalAuth: preHandlerHookHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      await authenticate(request, reply)
+      await authenticate(request, reply, () => {})
     } catch (error) {
       // Silently continue without user context
       fastify.log.debug('Optional authentication failed - continuing without user context')
     }
-  })
+  }
+
+  fastify.decorate('optionalAuth', optionalAuth)
 
   // Helper method to check if current user has permission
   fastify.decorate('hasPermission', (request: FastifyRequest, permission: string): boolean => {

@@ -156,23 +156,23 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
     }
 
     if (email) {
-      where.email = { contains: email, mode: 'insensitive' }
+      where['email'] = { contains: email, mode: 'insensitive' }
     }
 
     if (role) {
-      where.role = role
+      where['role'] = role
     }
 
     if (typeof emailVerified === 'boolean') {
-      where.emailVerified = emailVerified
+      where['emailVerified'] = emailVerified
     }
 
     if (supervisorId) {
-      where.supervisorId = supervisorId
+      where['supervisorId'] = supervisorId
     }
 
     if (search) {
-      where.OR = [
+      where['OR'] = [
         { email: { contains: search, mode: 'insensitive' } },
         {
           profile: {

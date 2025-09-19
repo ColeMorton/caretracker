@@ -123,53 +123,53 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
     }
 
     if (clientId) {
-      where.clientId = clientId
+      where['clientId'] = clientId
     }
 
     if (workerId) {
-      where.workerId = workerId
+      where['workerId'] = workerId
     }
 
     if (status) {
-      where.status = status
+      where['status'] = status
     }
 
     if (visitType) {
-      where.visitType = visitType
+      where['visitType'] = visitType
     }
 
     if (carePlanId) {
-      where.carePlanId = carePlanId
+      where['carePlanId'] = carePlanId
     }
 
     if (!includeCompleted) {
-      where.status = {
+      where['status'] = {
         notIn: ['COMPLETED', 'CANCELLED']
       }
     }
 
     if (dateFrom || dateTo) {
-      where.scheduledAt = {}
+      where['scheduledAt'] = {}
       if (dateFrom) {
-        where.scheduledAt.gte = dateFrom
+        (where['scheduledAt'] as Record<string, unknown>)['gte'] = dateFrom
       }
       if (dateTo) {
-        where.scheduledAt.lte = dateTo
+        (where['scheduledAt'] as Record<string, unknown>)['lte'] = dateTo
       }
     }
 
     if (onlyOverdue) {
-      where.scheduledAt = {
+      where['scheduledAt'] = {
         lt: new Date()
       }
-      where.status = {
+      where['status'] = {
         in: ['SCHEDULED', 'CONFIRMED']
       }
     }
 
     if (needsReview) {
-      where.status = 'COMPLETED'
-      where.reviewedAt = null
+      where['status'] = 'COMPLETED'
+      where['reviewedAt'] = null
     }
 
     const include = {
