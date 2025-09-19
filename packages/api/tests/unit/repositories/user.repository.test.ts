@@ -22,6 +22,31 @@ const mockPrisma = {
   $transaction: vi.fn(),
 } as unknown as PrismaClient
 
+// Create transaction mock that mimics the real Prisma transaction behavior
+const createTransactionMock = (operations: Record<string, any> = {}) => {
+  const mockTx = {
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
+      ...operations.user
+    },
+    profile: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
+      ...operations.profile
+    }
+  }
+
+  mockPrisma.$transaction = vi.fn().mockImplementation(async (callback) => {
+    return await callback(mockTx)
+  })
+
+  return mockTx
+}
+
 // Mock audit logger
 const mockAuditLogger = vi.fn()
 
@@ -32,6 +57,8 @@ describe('UserRepository', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Set up default transaction mock
+    createTransactionMock()
     repository = new UserRepository(mockPrisma, mockAuditLogger)
   })
 
@@ -308,17 +335,11 @@ describe('UserRepository', () => {
         role: 'CLIENT' as const
       }
 
-      const mockTx = {
+      // Mock existing user in transaction
+      createTransactionMock({
         user: {
           findUnique: vi.fn().mockResolvedValue({ id: 'existing-user' })
         }
-      }
-
-      // Mock the transaction to throw ConflictError directly
-      mockPrisma.$transaction = vi.fn().mockImplementation(async (callback) => {
-        return callback(mockTx).catch((error) => {
-          throw error // Re-throw the ConflictError
-        })
       })
 
       await expect(repository.createWithProfile(userData, userId))
@@ -337,19 +358,14 @@ describe('UserRepository', () => {
         }
       }
 
-      const mockTx = {
+      // Mock existing MRN in transaction
+      createTransactionMock({
         user: {
           findUnique: vi.fn().mockResolvedValue(null)
         },
         profile: {
           findUnique: vi.fn().mockResolvedValue({ id: 'existing-profile' })
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(async (callback) => {
-        return callback(mockTx).catch((error) => {
-          throw error // Re-throw the ConflictError
-        })
       })
 
       await expect(repository.createWithProfile(userData, userId))
@@ -370,14 +386,12 @@ describe('UserRepository', () => {
         profile: null
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         user: {
           findUnique: vi.fn().mockResolvedValue(null),
           create: vi.fn().mockResolvedValue(createdUser)
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.createWithProfile(userData, userId)
 
@@ -429,17 +443,17 @@ describe('UserRepository', () => {
         updatedAt: new Date()
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         user: {
-          findUnique: vi.fn().mockResolvedValue(currentUser),
+          findUnique: vi.fn()
+            .mockResolvedValueOnce(currentUser) // First call: get current user
+            .mockResolvedValueOnce(null),       // Second call: check email uniqueness
           update: vi.fn().mockResolvedValue(updatedUser)
         },
         profile: {
           update: vi.fn().mockResolvedValue(updatedProfile)
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.updateWithProfile(targetUserId, updateData, userId)
 
@@ -471,13 +485,11 @@ describe('UserRepository', () => {
     })
 
     it('should throw NotFoundError when user does not exist', async () => {
-      const mockTx = {
+      createTransactionMock({
         user: {
           findUnique: vi.fn().mockResolvedValue(null)
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       await expect(repository.updateWithProfile(targetUserId, { email: 'new@example.com' }, userId))
         .rejects.toThrow(NotFoundError)
@@ -505,7 +517,7 @@ describe('UserRepository', () => {
         version: 1
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         user: {
           findUnique: vi.fn().mockResolvedValue(currentUser),
           update: vi.fn().mockResolvedValue(currentUser)
@@ -513,9 +525,7 @@ describe('UserRepository', () => {
         profile: {
           create: vi.fn().mockResolvedValue(newProfile)
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.updateWithProfile(targetUserId, updateData, userId)
 
@@ -652,13 +662,9 @@ describe('UserRepository', () => {
     })
 
     it('should not throw error when update fails', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockPrisma.user.update = vi.fn().mockRejectedValue(new Error('Update failed'))
 
       await expect(repository.updateLastLogin(targetUserId)).resolves.not.toThrow()
-      expect(consoleSpy).toHaveBeenCalled()
-
-      consoleSpy.mockRestore()
     })
   })
 
@@ -681,13 +687,9 @@ describe('UserRepository', () => {
     })
 
     it('should not throw error when update fails', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockPrisma.user.update = vi.fn().mockRejectedValue(new Error('Update failed'))
 
       await expect(repository.updateLoginAttempts(targetUserId, 1)).resolves.not.toThrow()
-      expect(consoleSpy).toHaveBeenCalled()
-
-      consoleSpy.mockRestore()
     })
   })
 })

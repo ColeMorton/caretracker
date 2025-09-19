@@ -29,17 +29,91 @@ declare module 'fastify' {
 }
 
 const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
+  // Helper function to create error response
+  const createErrorResponse = (
+    appError: AppError,
+    requestId: string,
+    timestamp: string
+  ): ErrorResponse => ({
+    success: false,
+    error: {
+      code: appError.code,
+      message: appError.message,
+      details: appError.details,
+      requestId,
+      timestamp
+    }
+  })
+
+  // Helper function to log errors
+  const logError = (error: Error, request: FastifyRequest, logContext: Record<string, unknown>): boolean => {
+    if (error instanceof AppError) {
+      return logAppError(error, request, logContext)
+    } else {
+      request.log.error(logContext, 'Unhandled error')
+      return true
+    }
+  }
+
+  // Helper function to log app errors with appropriate severity
+  const logAppError = (error: AppError, request: FastifyRequest, logContext: Record<string, unknown>): boolean => {
+    if (error.code.includes('HIPAA') || error.code.includes('PHI')) {
+      request.log.error(logContext, 'HIPAA/Security violation')
+    } else if (error.statusCode >= 500) {
+      request.log.error(logContext, 'Server error')
+    } else if (error.statusCode >= 400) {
+      request.log.warn(logContext, 'Client error')
+    } else {
+      request.log.info(logContext, 'Application error')
+    }
+    return true
+  }
+
+  // Helper function to handle Prisma errors
+  const handlePrismaError = (error: Prisma.PrismaClientKnownRequestError): AppError => {
+    switch (error.code) {
+      case 'P2002': {
+        const target = error.meta?.target as readonly string[] | undefined
+        const field = target?.[0] || 'field'
+        return new ValidationError(`${field} already exists`, {
+          field,
+          code: error.code,
+          message: 'Unique constraint violation'
+        })
+      }
+      case 'P2025':
+        return new AppError(ErrorCode.RESOURCE_NOT_FOUND, 'Record not found', 404)
+      case 'P2034':
+        return new AppError(ErrorCode.OPTIMISTIC_LOCK_ERROR, 'Resource was modified by another user', 409)
+      default:
+        return new DatabaseError('Database operation failed', {
+          code: error.code,
+          message: error.message
+        })
+    }
+  }
+
+  // Helper function to handle Zod validation errors
+  const handleZodError = (error: ZodError): ValidationError => {
+    return new ValidationError('Request validation failed',
+      error.errors.map(err => ({
+        field: err.path.join('.'),
+        code: err.code,
+        message: err.message,
+        value: err.input
+      }))
+    )
+  }
   // Global error handler
   fastify.setErrorHandler(async (error: Error, request: FastifyRequest, reply: FastifyReply) => {
     const requestId = request.id
     const timestamp = new Date().toISOString()
-    const userId = request.user?.id
 
     // Log error with healthcare compliance context
     const logContext = {
       err: error,
       requestId,
-      userId,
+      userId: request.user?.id,
       userRole: request.user?.role,
       url: request.url,
       method: request.method,
@@ -48,136 +122,42 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
       timestamp
     }
 
-    // Different log levels based on error severity
-    if (error instanceof AppError) {
-      if (error.code.includes('HIPAA') || error.code.includes('PHI')) {
-        request.log.error(logContext, 'HIPAA/Security violation')
-      } else if (error.statusCode >= 500) {
-        request.log.error(logContext, 'Server error')
-      } else if (error.statusCode >= 400) {
-        request.log.warn(logContext, 'Client error')
-      } else {
-        request.log.info(logContext, 'Application error')
-      }
-    } else {
-      request.log.error(logContext, 'Unhandled error')
-    }
+    logError(error, request, logContext)
 
     // Handle known error types
     if (error instanceof AppError) {
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          requestId,
-          timestamp
-        }
-      }
-
+      const errorResponse = createErrorResponse(error, requestId, timestamp)
       return reply.status(error.statusCode).send(errorResponse)
     }
 
-    // Handle Zod validation errors
     if (error instanceof ZodError) {
-      const validationError = new ValidationError('Request validation failed',
-        error.errors.map(err => ({
-          field: err.path.join('.'),
-          code: err.code,
-          message: err.message,
-          value: err.input
-        }))
-      )
-
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: validationError.code,
-          message: validationError.message,
-          details: validationError.details,
-          requestId,
-          timestamp
-        }
-      }
-
+      const validationError = handleZodError(error)
+      const errorResponse = createErrorResponse(validationError, requestId, timestamp)
       return reply.status(400).send(errorResponse)
     }
 
-    // Handle Prisma errors
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      const appError: AppError = (() => {
-        switch (error.code) {
-          case 'P2002':
-            // Unique constraint violation
-            const target = error.meta?.target as readonly string[] | undefined
-            const field = target?.[0] || 'field'
-            return new ValidationError(`${field} already exists`, {
-              field,
-              code: error.code,
-              message: 'Unique constraint violation'
-            })
-          case 'P2025':
-            // Record not found
-            return new AppError(ErrorCode.RESOURCE_NOT_FOUND, 'Record not found', 404)
-          case 'P2034':
-            // Transaction failed due to write conflict
-            return new AppError(ErrorCode.OPTIMISTIC_LOCK_ERROR, 'Resource was modified by another user', 409)
-          default:
-            return new DatabaseError('Database operation failed', {
-              code: error.code,
-              message: error.message
-            })
-        }
-      })()
-
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: appError.code,
-          message: appError.message,
-          details: appError.details,
-          requestId,
-          timestamp
-        }
-      }
-
+      const appError = handlePrismaError(error)
+      const errorResponse = createErrorResponse(appError, requestId, timestamp)
       return reply.status(appError.statusCode).send(errorResponse)
     }
 
-    // Handle Fastify validation errors
     if (error.validation) {
       const validationError = new ValidationError('Request validation failed', {
         field: error.validationContext,
         message: error.message
       })
-
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: validationError.code,
-          message: validationError.message,
-          details: validationError.details,
-          requestId,
-          timestamp
-        }
-      }
-
+      const errorResponse = createErrorResponse(validationError, requestId, timestamp)
       return reply.status(400).send(errorResponse)
     }
 
-    // Handle rate limit errors
     if (error.statusCode === 429) {
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: ErrorCode.RATE_LIMIT_EXCEEDED,
-          message: 'Too many requests. Please try again later.',
-          requestId,
-          timestamp
-        }
-      }
-
+      const rateLimitError = new AppError(
+        ErrorCode.RATE_LIMIT_EXCEEDED,
+        'Too many requests. Please try again later.',
+        429
+      )
+      const errorResponse = createErrorResponse(rateLimitError, requestId, timestamp)
       return reply.status(429).send(errorResponse)
     }
 
@@ -187,17 +167,7 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
         ? 'Internal server error'
         : error.message
     )
-
-    const errorResponse: ErrorResponse = {
-      success: false,
-      error: {
-        code: systemError.code,
-        message: systemError.message,
-        requestId,
-        timestamp
-      }
-    }
-
+    const errorResponse = createErrorResponse(systemError, requestId, timestamp)
     return reply.status(500).send(errorResponse)
   })
 

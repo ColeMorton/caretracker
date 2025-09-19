@@ -7,6 +7,7 @@ import {
   OptimisticLockError,
   NotFoundError,
   DatabaseError,
+  ConflictError,
 } from '../utils/errors.js'
 
 const UNKNOWN_ERROR_MESSAGE = 'Unknown error'
@@ -421,6 +422,15 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     try {
       return await this.prisma.$transaction(callback)
     } catch (error) {
+      // Re-throw business logic errors unchanged
+      if (error instanceof NotFoundError ||
+          error instanceof OptimisticLockError ||
+          error instanceof ConflictError ||
+          error instanceof DatabaseError) {
+        throw error
+      }
+
+      // Wrap only actual database/transaction errors
       throw new DatabaseError(
         `Transaction failed in ${this.entityName} repository`,
         {

@@ -1,4 +1,4 @@
-import { type FastifyPluginAsync } from 'fastify'
+import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
 
 import { VisitRepository } from '../../repositories/visit.repository.js'
 import {
@@ -15,6 +15,54 @@ import {
   rescheduleVisitRequestSchema
 } from '../../schemas/visits.js'
 import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
+
+// Helper function to validate visit access permissions
+const validateVisitAccess = (user: NonNullable<FastifyRequest['user']>, visit: Record<string, unknown>): void => {
+  const hasAdminPrivileges = ['ADMIN', 'SUPERVISOR'].includes(user.role)
+  const isClientOwner = visit.clientId === user.id
+  const isAssignedWorker = visit.workerId === user.id
+
+  const canAccess = hasAdminPrivileges || isClientOwner || isAssignedWorker
+
+  if (!canAccess) {
+    throw new AuthorizationError('Cannot access this visit')
+  }
+  return undefined
+}
+
+// Helper function to format user profile data
+const formatUserProfile = (user: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined => {
+  if (!user) return undefined
+
+  return {
+    id: user.id,
+    email: user.email,
+    profile: user.profile ? {
+      firstName: (user.profile as Record<string, unknown>).firstName,
+      lastName: (user.profile as Record<string, unknown>).lastName,
+      phone: (user.profile as Record<string, unknown>).phone || undefined
+    } : undefined
+  }
+}
+
+// Helper function to format visit response
+const formatVisitResponse = (visit: Record<string, unknown>): Record<string, unknown> => ({
+  id: visit.id,
+  clientId: visit.clientId,
+  workerId: visit.workerId,
+  scheduledAt: new Date(visit.scheduledAt as string).toISOString(),
+  estimatedDuration: visit.estimatedDuration,
+  status: visit.status,
+  activities: visit.activities || [],
+  actualStartTime: visit.actualStartTime ? new Date(visit.actualStartTime as string).toISOString() : undefined,
+  actualEndTime: visit.actualEndTime ? new Date(visit.actualEndTime as string).toISOString() : undefined,
+  actualDuration: visit.actualDuration || undefined,
+  notes: visit.notes || undefined,
+  createdAt: new Date(visit.createdAt as string).toISOString(),
+  updatedAt: new Date(visit.updatedAt as string).toISOString(),
+  client: formatUserProfile(visit.client as Record<string, unknown> | null | undefined),
+  worker: formatUserProfile(visit.worker as Record<string, unknown> | null | undefined)
+})
 
 const visits: FastifyPluginAsync = async (fastify, _opts) => {
   const visitRepository = new VisitRepository(
@@ -116,51 +164,11 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
       throw new NotFoundError('Visit not found')
     }
 
-    // Check access permissions
-    const canAccess =
-      ['ADMIN', 'SUPERVISOR'].includes(request.user!.role) ||
-      visit.clientId === request.user!.id ||
-      visit.workerId === request.user!.id
-
-    if (!canAccess) {
-      throw new AuthorizationError('Cannot access this visit')
-    }
+    validateVisitAccess(request.user!, visit)
 
     return reply.status(200).send({
       success: true,
-      data: {
-        id: visit.id,
-        clientId: visit.clientId,
-        workerId: visit.workerId,
-        scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: visit.estimatedDuration,
-        status: visit.status,
-        activities: visit.activities || [],
-        actualStartTime: visit.actualStartTime?.toISOString() || undefined,
-        actualEndTime: visit.actualEndTime?.toISOString() || undefined,
-        actualDuration: visit.actualDuration || undefined,
-        notes: visit.notes || undefined,
-        createdAt: visit.createdAt.toISOString(),
-        updatedAt: visit.updatedAt.toISOString(),
-        client: visit.client ? {
-          id: visit.client.id,
-          email: visit.client.email,
-          profile: visit.client.profile ? {
-            firstName: visit.client.profile.firstName,
-            lastName: visit.client.profile.lastName,
-            phone: visit.client.profile.phone || undefined
-          } : undefined
-        } : undefined,
-        worker: visit.worker ? {
-          id: visit.worker.id,
-          email: visit.worker.email,
-          profile: visit.worker.profile ? {
-            firstName: visit.worker.profile.firstName,
-            lastName: visit.worker.profile.lastName,
-            phone: visit.worker.profile.phone || undefined
-          } : undefined
-        } : undefined
-      }
+      data: formatVisitResponse(visit)
     })
   })
 

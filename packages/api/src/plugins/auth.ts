@@ -11,6 +11,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     readonly authService: AuthService
     readonly authenticate: preHandlerHookHandler
+    readonly authorize: (permissions: readonly string[]) => preHandlerHookHandler
     readonly requirePermission: (permission: string) => preHandlerHookHandler
     readonly requireRole: (...roles: readonly string[]) => preHandlerHookHandler
     readonly requireOwnership: (resourceParam?: string) => preHandlerHookHandler
@@ -94,6 +95,42 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     }
   }
 
+  // Multi-permission authorization hook (user needs ANY of the provided permissions)
+  const authorize = (permissions: readonly string[]): preHandlerHookHandler => {
+    return async (request: FastifyRequest, _reply: FastifyReply) => {
+      if (!request.user) {
+        throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
+      }
+
+      // Check if user has any of the required permissions
+      const hasPermissionChecks = await Promise.all(
+        permissions.map(permission => authService.checkPermission(request.user!.id, permission))
+      )
+      const hasAnyPermission = hasPermissionChecks.some(hasPermission => hasPermission)
+
+      if (!hasAnyPermission) {
+        // Log unauthorized access attempt
+        fastify.log.warn({
+          userId: request.user.id,
+          role: request.user.role,
+          requiredPermissions: permissions,
+          url: request.url,
+          method: request.method,
+          ip: request.ip
+        }, 'Unauthorized access attempt')
+
+        throw new AuthorizationError(`Insufficient permissions. Required one of: ${permissions.join(', ')}`)
+      }
+
+      // Log successful authorization
+      fastify.log.debug({
+        userId: request.user.id,
+        permissions,
+        url: request.url
+      }, 'Authorization check passed')
+    }
+  }
+
   // Permission-based authorization hook
   const requirePermission = (permission: string): preHandlerHookHandler => {
     return async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -155,6 +192,49 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     }
   }
 
+  // Helper function to check if user has admin privileges
+  const hasAdminPrivileges = (role: string): boolean => {
+    return ['ADMIN', 'SUPERVISOR'].includes(role)
+  }
+
+  // Helper function to validate resource access
+  const validateResourceAccess = async (
+    user: NonNullable<FastifyRequest['user']>,
+    resourceId: string,
+    url: string
+  ): Promise<void> => {
+    if (resourceId === user.id) {
+      return // User accessing their own resource
+    }
+
+    if (user.role === 'CLIENT') {
+      await validateClientAccess(user.id, resourceId, url)
+    } else if (user.role === 'WORKER') {
+      await validateWorkerAccess(user.id, resourceId, url)
+    } else {
+      throw new AuthorizationError('You can only access your own resources')
+    }
+  }
+
+  // Helper function to validate client access
+  const validateClientAccess = async (userId: string, resourceId: string, url: string): Promise<void> => {
+    const isClientRoute = url.includes('/visits') || url.includes('/budgets')
+    const hasOwnership = isClientRoute && await verifyClientOwnership(userId, resourceId, url)
+
+    if (!hasOwnership) {
+      throw new AuthorizationError('You can only access your own resources')
+    }
+  }
+
+  // Helper function to validate worker access
+  const validateWorkerAccess = async (userId: string, resourceId: string, url: string): Promise<void> => {
+    const hasAssignment = await verifyWorkerAssignment(userId, resourceId, url)
+
+    if (!hasAssignment) {
+      throw new AuthorizationError('You can only access assigned resources')
+    }
+  }
+
   // Ownership-based authorization (user can only access their own resources)
   const requireOwnership = (resourceParam: string = 'id'): preHandlerHookHandler => {
     return async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -162,38 +242,26 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         throw new AuthenticationError(AUTHENTICATION_REQUIRED_MESSAGE)
       }
 
-      // Admin and Supervisor roles can access all resources
-      if (['ADMIN', 'SUPERVISOR'].includes(request.user.role)) {
+      if (hasAdminPrivileges(request.user.role)) {
         return
       }
 
+      // Security: Validate parameter name against whitelist to prevent object injection
+      const allowedParams = ['id', 'userId', 'clientId', 'workerId', 'visitId', 'budgetId', 'carePlanId']
+      if (!allowedParams.includes(resourceParam)) {
+        throw new AuthenticationError(`Invalid resource parameter: ${resourceParam}`)
+      }
+
       const params = request.params as Record<string, string>
-      const resourceId = params[resourceParam]
+      // Safe property access using Map to prevent object injection
+      const paramsMap = new Map(Object.entries(params))
+      const resourceId = paramsMap.get(resourceParam)
 
       if (!resourceId) {
         throw new AuthenticationError(`Resource parameter '${resourceParam}' is required`)
       }
 
-      // For most cases, resource ID should match user ID for ownership
-      // For more complex ownership checks, this would need to query the database
-      if (resourceId !== request.user.id) {
-        // Check if this is a client trying to access their own resources
-        if (request.user.role === 'CLIENT') {
-          // Here you might need to check the database to verify ownership
-          // For now, we'll allow if the route is designed for client access
-          const isClientRoute = request.url.includes('/visits') || request.url.includes('/budgets')
-          if (!isClientRoute || !await verifyClientOwnership(request.user.id, resourceId, request.url)) {
-            throw new AuthorizationError('You can only access your own resources')
-          }
-        } else if (request.user.role === 'WORKER') {
-          // Workers can access resources they're assigned to
-          if (!await verifyWorkerAssignment(request.user.id, resourceId, request.url)) {
-            throw new AuthorizationError('You can only access assigned resources')
-          }
-        } else {
-          throw new AuthorizationError('You can only access your own resources')
-        }
-      }
+      await validateResourceAccess(request.user, resourceId, request.url)
 
       fastify.log.debug({
         userId: request.user.id,
@@ -269,6 +337,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
   // Decorate fastify instance with auth methods
   fastify.decorate('authenticate', authenticate)
+  fastify.decorate('authorize', authorize)
   fastify.decorate('requirePermission', requirePermission)
   fastify.decorate('requireRole', requireRole)
   fastify.decorate('requireOwnership', requireOwnership)

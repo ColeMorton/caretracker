@@ -17,7 +17,6 @@ export interface JWTPayload {
 export interface TokenPair {
   readonly accessToken: string
   readonly refreshToken: string
-  readonly expiresIn: number
 }
 
 export interface AuthResult {
@@ -25,11 +24,7 @@ export interface AuthResult {
     readonly id: string
     readonly email: string
     readonly role: string
-    readonly profile?: {
-      readonly firstName: string
-      readonly lastName: string
-      readonly phone?: string | null
-    }
+    readonly permissions: readonly string[]
   }
   readonly tokens: TokenPair
 }
@@ -120,10 +115,9 @@ export class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResult> {
     const { email, password } = credentials
 
-    // Find user with profile
+    // Find user
     const user = await this.prisma.user.findUnique({
-      where: { email, deletedAt: null },
-      include: { profile: true },
+      where: { email },
     })
 
     if (!user) {
@@ -159,8 +153,20 @@ export class AuthService {
     // Generate session ID
     const sessionId = this.generateSessionId()
 
-    // Generate token pair
-    const tokens = await this.generateTokenPair(user, sessionId)
+    // Generate tokens
+    const permissions = Array.from(this.getRolePermissions(user.role))
+    const accessToken = await this.generateAccessToken({
+      userId: user.id,
+      role: user.role,
+      permissions,
+      sessionId,
+    })
+    const refreshToken = await this.generateRefreshToken(user.id)
+
+    const tokens = {
+      accessToken,
+      refreshToken,
+    }
 
     // Update last login timestamp
     await this.prisma.user.update({
@@ -180,7 +186,12 @@ export class AuthService {
     )
 
     return {
-      user: this.sanitizeUser(user),
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        permissions,
+      },
       tokens,
     }
   }
@@ -188,11 +199,11 @@ export class AuthService {
   async refreshTokens(refreshToken: string): Promise<TokenPair> {
     try {
       // Verify refresh token
-      const payload = this.fastify.jwt.verify(refreshToken) as JWTPayload
+      const payload = await this.fastify.jwt.verify(refreshToken) as { readonly userId: string; readonly type: string }
 
       // Check if user still exists and is active
       const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId, deletedAt: null },
+        where: { id: payload.userId },
       })
 
       if (!user || !user.isActive) {
@@ -205,8 +216,27 @@ export class AuthService {
       //   throw new AuthenticationError('Token has been revoked')
       // }
 
-      // Generate new token pair
-      const newTokens = await this.generateTokenPair(user, payload.sessionId)
+      // Revoke old refresh token
+      await this.prisma.refreshToken.update({
+        where: { token: refreshToken },
+        data: { isRevoked: true },
+      })
+
+      // Generate new tokens
+      const permissions = Array.from(this.getRolePermissions(user.role))
+      const sessionId = this.generateSessionId()
+      const accessToken = await this.generateAccessToken({
+        userId: user.id,
+        role: user.role,
+        permissions,
+        sessionId,
+      })
+      const newRefreshToken = await this.generateRefreshToken(user.id)
+
+      const newTokens = {
+        accessToken,
+        refreshToken: newRefreshToken,
+      }
 
       // Blacklist old refresh token (implement with Redis)
       // await this.blacklistToken(refreshToken)
@@ -230,20 +260,15 @@ export class AuthService {
 
   async logout(refreshToken: string): Promise<void> {
     try {
-      const payload = this.fastify.jwt.verify(refreshToken) as JWTPayload
+      // Revoke refresh token in database
+      await this.prisma.refreshToken.update({
+        where: { token: refreshToken },
+        data: { isRevoked: true },
+      })
 
-      // Blacklist the refresh token (implement with Redis)
-      // await this.blacklistToken(refreshToken)
-
-      this.fastify.log.info(
-        {
-          userId: payload.userId,
-          sessionId: payload.sessionId,
-        },
-        'User logged out successfully'
-      )
+      this.fastify.log.info('User logged out successfully')
     } catch (error) {
-      // Even if token verification fails, we should succeed
+      // Even if token revocation fails, we should succeed
       // to prevent information leakage
       this.fastify.log.warn('Logout attempt with invalid token')
     }
@@ -251,17 +276,7 @@ export class AuthService {
 
   async validateAccessToken(token: string): Promise<JWTPayload> {
     try {
-      const payload = this.fastify.jwt.verify(token) as JWTPayload
-
-      // Verify user still exists and is active
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId, deletedAt: null },
-      })
-
-      if (!user || !user.isActive) {
-        throw new AuthenticationError('Token is no longer valid')
-      }
-
+      const payload = await this.fastify.jwt.verify(token) as JWTPayload
       return payload
     } catch (error) {
       if (
@@ -292,43 +307,52 @@ export class AuthService {
     return bcrypt.compare(password, hashedPassword)
   }
 
-  async generateAccessToken(user: User, sessionId: string): Promise<string> {
-    const permissions = this.getRolePermissions(user.role)
-    const payload: Omit<JWTPayload, 'iat' | 'exp'> = {
-      userId: user.id,
-      email: user.email,
-      role: user.role as JWTPayload['role'],
-      permissions,
-      sessionId,
-    }
-    return this.fastify.jwt.sign(payload, {
+  async generateAccessToken(payload: {
+    readonly userId: string
+    readonly role: string
+    readonly permissions: readonly string[]
+    readonly sessionId: string
+  }): Promise<string> {
+    return await this.fastify.jwt.sign(payload, {
       expiresIn: this.ACCESS_TOKEN_EXPIRY,
     })
   }
 
-  async generateRefreshToken(user: User, sessionId: string): Promise<string> {
-    const permissions = this.getRolePermissions(user.role)
-    const payload: Omit<JWTPayload, 'iat' | 'exp'> = {
-      userId: user.id,
-      email: user.email,
-      role: user.role as JWTPayload['role'],
-      permissions,
-      sessionId,
+  async generateRefreshToken(userId: string): Promise<string> {
+    const payload = {
+      userId,
+      type: 'refresh'
     }
-    return this.fastify.jwt.sign(payload, {
+    const token = await this.fastify.jwt.sign(payload, {
       expiresIn: this.REFRESH_TOKEN_EXPIRY,
     })
+
+    // Store refresh token in database
+    await this.prisma.refreshToken.create({
+      data: {
+        token,
+        userId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      },
+    })
+
+    return token
   }
 
-  async validateRefreshToken(refreshToken: string): Promise<JWTPayload> {
+  async validateRefreshToken(refreshToken: string): Promise<{ readonly userId: string; readonly type: string }> {
     try {
-      const payload = this.fastify.jwt.verify(refreshToken) as JWTPayload
+      const payload = this.fastify.jwt.verify(refreshToken) as { readonly userId: string; readonly type: string }
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId, deletedAt: null },
+      // Check if token exists and is not revoked
+      const dbToken = await this.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
       })
 
-      if (!user || !user.isActive) {
+      if (!dbToken || dbToken.isRevoked) {
+        throw new AuthenticationError(INVALID_REFRESH_TOKEN_MESSAGE)
+      }
+
+      if (dbToken.expiresAt < new Date()) {
         throw new AuthenticationError(INVALID_REFRESH_TOKEN_MESSAGE)
       }
 
@@ -368,15 +392,15 @@ export class AuthService {
       where: { id: userId },
       data: {
         password: hashedNewPassword,
-        updatedAt: new Date(),
       },
     })
 
     this.fastify.log.info({ userId }, 'Password changed successfully')
   }
 
-  getRolePermissions(role: string): readonly string[] {
-    return ROLE_PERMISSIONS[role as keyof typeof ROLE_PERMISSIONS] || []
+  getRolePermissions(role: string): ReadonlySet<string> {
+    const permissions = ROLE_PERMISSIONS[role as keyof typeof ROLE_PERMISSIONS] || []
+    return new Set(permissions) as ReadonlySet<string>
   }
 
   async checkPermission(
@@ -391,7 +415,7 @@ export class AuthService {
       return false
     }
 
-    const userPermissions = this.getRolePermissions(user.role)
+    const userPermissions = Array.from(this.getRolePermissions(user.role))
 
     // Admin has all permissions
     if (userPermissions.includes('*')) {
@@ -402,40 +426,39 @@ export class AuthService {
     return userPermissions.includes(requiredPermission)
   }
 
-  async hasPermission(
-    userId: string,
-    requiredPermission: string
-  ): Promise<boolean> {
-    return this.checkPermission(userId, requiredPermission)
-  }
-
-  private async generateTokenPair(
-    user: User,
-    sessionId: string
-  ): Promise<TokenPair> {
-    const permissions = this.getRolePermissions(user.role)
-
-    const payload: Omit<JWTPayload, 'iat' | 'exp'> = {
-      userId: user.id,
-      email: user.email,
-      role: user.role as JWTPayload['role'],
-      permissions,
-      sessionId,
+  hasPermission(
+    userPermissions: readonly string[],
+    requiredPermission: string,
+    userId?: string,
+    targetUserId?: string
+  ): boolean {
+    // Admin has all permissions
+    if (userPermissions.includes('*')) {
+      return true
     }
 
-    const accessToken = this.fastify.jwt.sign(payload, {
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
-    })
-    const refreshToken = this.fastify.jwt.sign(payload, {
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    })
-
-    return {
-      accessToken,
-      refreshToken,
-      expiresIn: 3600, // 1 hour in seconds
+    // Check for exact permission match
+    if (userPermissions.includes(requiredPermission)) {
+      return true
     }
+
+    // Check for wildcard permission match
+    const wildcardPermission = `${requiredPermission.split(':')[0]  }:*`
+    if (userPermissions.includes(wildcardPermission)) {
+      return true
+    }
+
+    // Handle ownership-based permissions
+    if (userId && targetUserId && userId === targetUserId) {
+      const ownPermission = `${requiredPermission}:own`
+      if (userPermissions.includes(ownPermission)) {
+        return true
+      }
+    }
+
+    return false
   }
+
 
   private async handleFailedLogin(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
@@ -451,9 +474,9 @@ export class AuthService {
       where: { id: userId },
       data: {
         loginAttempts: newAttempts,
-        lockedUntil: shouldLock
-          ? new Date(Date.now() + this.LOCKOUT_DURATION)
-          : null,
+        ...(shouldLock && {
+          lockedUntil: new Date(Date.now() + this.LOCKOUT_DURATION),
+        }),
       },
     })
 
@@ -474,6 +497,7 @@ export class AuthService {
       data: {
         loginAttempts: 0,
         lockedUntil: null,
+        lastLoginAt: new Date(),
       },
     })
   }

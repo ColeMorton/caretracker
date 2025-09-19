@@ -19,6 +19,28 @@ const mockPrisma = {
   $transaction: vi.fn(),
 } as unknown as PrismaClient
 
+// Create transaction mock that mimics the real Prisma transaction behavior
+const createTransactionMock = (operations: Record<string, any> = {}) => {
+  const mockTx = {
+    visit: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
+      count: vi.fn(),
+      groupBy: vi.fn(),
+      aggregate: vi.fn(),
+      ...operations.visit
+    }
+  }
+
+  mockPrisma.$transaction = vi.fn().mockImplementation(async (callback) => {
+    return await callback(mockTx)
+  })
+
+  return mockTx
+}
+
 // Mock audit logger
 const mockAuditLogger = vi.fn()
 
@@ -31,6 +53,8 @@ describe('VisitRepository', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Set up default transaction mock
+    createTransactionMock()
     repository = new VisitRepository(mockPrisma, mockAuditLogger)
   })
 
@@ -84,16 +108,14 @@ describe('VisitRepository', () => {
         version: 1
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         visit: {
           create: vi.fn().mockResolvedValue(createdVisit),
           findUnique: vi.fn(),
           findFirst: vi.fn(),
           update: vi.fn()
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.create(visitData, userId)
 
@@ -125,16 +147,14 @@ describe('VisitRepository', () => {
         version: 2
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         visit: {
           findUnique: vi.fn().mockResolvedValue(scheduledVisit),
           findFirst: vi.fn(),
           update: vi.fn().mockResolvedValue(checkedInVisit),
           create: vi.fn()
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.checkin(visitId, workerId, checkinData)
 
@@ -181,16 +201,14 @@ describe('VisitRepository', () => {
         version: 3
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         visit: {
           findUnique: vi.fn().mockResolvedValue(inProgressVisit),
           findFirst: vi.fn(),
           update: vi.fn().mockResolvedValue(completedVisit),
           create: vi.fn()
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.checkout(visitId, workerId, checkoutData)
 
@@ -220,16 +238,14 @@ describe('VisitRepository', () => {
         version: 2
       }
 
-      const mockTx = {
+      const mockTx = createTransactionMock({
         visit: {
           findUnique: vi.fn(),
           findFirst: vi.fn().mockResolvedValue(originalVisit),
           update: vi.fn().mockResolvedValue(rescheduledVisit),
           create: vi.fn()
         }
-      }
-
-      mockPrisma.$transaction = vi.fn().mockImplementation(callback => callback(mockTx))
+      })
 
       const result = await repository.reschedule(visitId, newScheduledAt, userId, reason)
 
