@@ -2,9 +2,7 @@ import type { User, PrismaClient } from '@caretracker/database'
 import bcrypt from 'bcryptjs'
 import type { FastifyInstance } from 'fastify'
 
-import {
-  AuthenticationError
-} from '../utils/errors.js'
+import { AuthenticationError } from '../utils/errors.js'
 
 export interface JWTPayload {
   readonly userId: string
@@ -30,7 +28,7 @@ export interface AuthResult {
     readonly profile?: {
       readonly firstName: string
       readonly lastName: string
-      readonly phone?: string
+      readonly phone?: string | null
     }
   }
   readonly tokens: TokenPair
@@ -40,6 +38,8 @@ export interface LoginCredentials {
   readonly email: string
   readonly password: string
 }
+
+const INVALID_REFRESH_TOKEN_MESSAGE = 'Invalid refresh token'
 
 // Role-based permissions system
 const _PERMISSIONS = {
@@ -73,7 +73,7 @@ const _PERMISSIONS = {
   'visits:approve': 'Approve visit completions',
   'quality:audit': 'Perform quality audits',
   'careplans:approve': 'Approve care plans',
-  'reports:team': 'Generate team reports'
+  'reports:team': 'Generate team reports',
 } as const
 
 const ROLE_PERMISSIONS = {
@@ -81,7 +81,7 @@ const ROLE_PERMISSIONS = {
     'visits:read:own',
     'profile:update:own',
     'budget:read:own',
-    'careplans:read:own'
+    'careplans:read:own',
   ],
   WORKER: [
     'visits:read:assigned',
@@ -89,7 +89,7 @@ const ROLE_PERMISSIONS = {
     'visits:checkin',
     'clients:read:assigned',
     'careplans:read:assigned',
-    'profile:update:own'
+    'profile:update:own',
   ],
   ADMIN: ['*'], // Full access
   SUPERVISOR: [
@@ -101,8 +101,8 @@ const ROLE_PERMISSIONS = {
     'reports:team',
     'reports:generate',
     'users:read:all',
-    'budgets:read:all'
-  ]
+    'budgets:read:all',
+  ],
 } as const
 
 export class AuthService {
@@ -123,7 +123,7 @@ export class AuthService {
     // Find user with profile
     const user = await this.prisma.user.findUnique({
       where: { email, deletedAt: null },
-      include: { profile: true }
+      include: { profile: true },
     })
 
     if (!user) {
@@ -137,8 +137,12 @@ export class AuthService {
 
     // Check if account is locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      const lockRemaining = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000)
-      throw new AuthenticationError(`Account is locked. Try again in ${lockRemaining} minutes`)
+      const lockRemaining = Math.ceil(
+        (user.lockedUntil.getTime() - Date.now()) / 60000
+      )
+      throw new AuthenticationError(
+        `Account is locked. Try again in ${lockRemaining} minutes`
+      )
     }
 
     // Verify password
@@ -161,20 +165,23 @@ export class AuthService {
     // Update last login timestamp
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() }
+      data: { lastLoginAt: new Date() },
     })
 
     // Log successful authentication
-    this.fastify.log.info({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      sessionId
-    }, 'User logged in successfully')
+    this.fastify.log.info(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        sessionId,
+      },
+      'User logged in successfully'
+    )
 
     return {
       user: this.sanitizeUser(user),
-      tokens
+      tokens,
     }
   }
 
@@ -185,11 +192,11 @@ export class AuthService {
 
       // Check if user still exists and is active
       const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId, deletedAt: null }
+        where: { id: payload.userId, deletedAt: null },
       })
 
       if (!user || !user.isActive) {
-        throw new AuthenticationError('Invalid refresh token')
+        throw new AuthenticationError(INVALID_REFRESH_TOKEN_MESSAGE)
       }
 
       // Check if refresh token is blacklisted (you'd implement this with Redis)
@@ -204,18 +211,20 @@ export class AuthService {
       // Blacklist old refresh token (implement with Redis)
       // await this.blacklistToken(refreshToken)
 
-      this.fastify.log.info({
-        userId: user.id,
-        sessionId: payload.sessionId
-      }, 'Tokens refreshed successfully')
+      this.fastify.log.info(
+        {
+          userId: user.id,
+          sessionId: payload.sessionId,
+        },
+        'Tokens refreshed successfully'
+      )
 
       return newTokens
-
     } catch (error) {
       if (error instanceof AuthenticationError) {
         throw error
       }
-      throw new AuthenticationError('Invalid refresh token')
+      throw new AuthenticationError(INVALID_REFRESH_TOKEN_MESSAGE)
     }
   }
 
@@ -226,11 +235,13 @@ export class AuthService {
       // Blacklist the refresh token (implement with Redis)
       // await this.blacklistToken(refreshToken)
 
-      this.fastify.log.info({
-        userId: payload.userId,
-        sessionId: payload.sessionId
-      }, 'User logged out successfully')
-
+      this.fastify.log.info(
+        {
+          userId: payload.userId,
+          sessionId: payload.sessionId,
+        },
+        'User logged out successfully'
+      )
     } catch (error) {
       // Even if token verification fails, we should succeed
       // to prevent information leakage
@@ -244,7 +255,7 @@ export class AuthService {
 
       // Verify user still exists and is active
       const user = await this.prisma.user.findUnique({
-        where: { id: payload.userId, deletedAt: null }
+        where: { id: payload.userId, deletedAt: null },
       })
 
       if (!user || !user.isActive) {
@@ -252,9 +263,11 @@ export class AuthService {
       }
 
       return payload
-
     } catch (error) {
-      if (error.code === 'FAST_JWT_EXPIRED') {
+      if (
+        (error as Error & { readonly code?: string }).code ===
+        'FAST_JWT_EXPIRED'
+      ) {
         throw new AuthenticationError('Token has expired')
       }
       throw new AuthenticationError('Invalid token')
@@ -265,13 +278,73 @@ export class AuthService {
     return bcrypt.hash(password, this.SALT_ROUNDS)
   }
 
-  async validatePassword(password: string, hashedPassword: string): Promise<boolean> {
+  async validatePassword(
+    password: string,
+    hashedPassword: string
+  ): Promise<boolean> {
     return bcrypt.compare(password, hashedPassword)
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  async verifyPassword(
+    password: string,
+    hashedPassword: string
+  ): Promise<boolean> {
+    return bcrypt.compare(password, hashedPassword)
+  }
+
+  async generateAccessToken(user: User, sessionId: string): Promise<string> {
+    const permissions = this.getRolePermissions(user.role)
+    const payload: Omit<JWTPayload, 'iat' | 'exp'> = {
+      userId: user.id,
+      email: user.email,
+      role: user.role as JWTPayload['role'],
+      permissions,
+      sessionId,
+    }
+    return this.fastify.jwt.sign(payload, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRY,
+    })
+  }
+
+  async generateRefreshToken(user: User, sessionId: string): Promise<string> {
+    const permissions = this.getRolePermissions(user.role)
+    const payload: Omit<JWTPayload, 'iat' | 'exp'> = {
+      userId: user.id,
+      email: user.email,
+      role: user.role as JWTPayload['role'],
+      permissions,
+      sessionId,
+    }
+    return this.fastify.jwt.sign(payload, {
+      expiresIn: this.REFRESH_TOKEN_EXPIRY,
+    })
+  }
+
+  async validateRefreshToken(refreshToken: string): Promise<JWTPayload> {
+    try {
+      const payload = this.fastify.jwt.verify(refreshToken) as JWTPayload
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.userId, deletedAt: null },
+      })
+
+      if (!user || !user.isActive) {
+        throw new AuthenticationError(INVALID_REFRESH_TOKEN_MESSAGE)
+      }
+
+      return payload
+    } catch (error) {
+      throw new AuthenticationError(INVALID_REFRESH_TOKEN_MESSAGE)
+    }
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId, deletedAt: null }
+      where: { id: userId, deletedAt: null },
     })
 
     if (!user) {
@@ -279,7 +352,10 @@ export class AuthService {
     }
 
     // Verify current password
-    const isValidPassword = await this.validatePassword(currentPassword, user.password)
+    const isValidPassword = await this.validatePassword(
+      currentPassword,
+      user.password
+    )
     if (!isValidPassword) {
       throw new AuthenticationError('Current password is incorrect')
     }
@@ -292,8 +368,8 @@ export class AuthService {
       where: { id: userId },
       data: {
         password: hashedNewPassword,
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     })
 
     this.fastify.log.info({ userId }, 'Password changed successfully')
@@ -303,9 +379,12 @@ export class AuthService {
     return ROLE_PERMISSIONS[role as keyof typeof ROLE_PERMISSIONS] || []
   }
 
-  async checkPermission(userId: string, requiredPermission: string): Promise<boolean> {
+  async checkPermission(
+    userId: string,
+    requiredPermission: string
+  ): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId, deletedAt: null }
+      where: { id: userId, deletedAt: null },
     })
 
     if (!user || !user.isActive) {
@@ -323,7 +402,17 @@ export class AuthService {
     return userPermissions.includes(requiredPermission)
   }
 
-  private async generateTokenPair(user: User, sessionId: string): Promise<TokenPair> {
+  async hasPermission(
+    userId: string,
+    requiredPermission: string
+  ): Promise<boolean> {
+    return this.checkPermission(userId, requiredPermission)
+  }
+
+  private async generateTokenPair(
+    user: User,
+    sessionId: string
+  ): Promise<TokenPair> {
     const permissions = this.getRolePermissions(user.role)
 
     const payload: Omit<JWTPayload, 'iat' | 'exp'> = {
@@ -331,22 +420,26 @@ export class AuthService {
       email: user.email,
       role: user.role as JWTPayload['role'],
       permissions,
-      sessionId
+      sessionId,
     }
 
-    const accessToken = this.fastify.jwt.sign(payload, { expiresIn: this.ACCESS_TOKEN_EXPIRY })
-    const refreshToken = this.fastify.jwt.sign(payload, { expiresIn: this.REFRESH_TOKEN_EXPIRY })
+    const accessToken = this.fastify.jwt.sign(payload, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRY,
+    })
+    const refreshToken = this.fastify.jwt.sign(payload, {
+      expiresIn: this.REFRESH_TOKEN_EXPIRY,
+    })
 
     return {
       accessToken,
       refreshToken,
-      expiresIn: 3600 // 1 hour in seconds
+      expiresIn: 3600, // 1 hour in seconds
     }
   }
 
   private async handleFailedLogin(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId }
+      where: { id: userId },
     })
 
     if (!user) return
@@ -358,15 +451,20 @@ export class AuthService {
       where: { id: userId },
       data: {
         loginAttempts: newAttempts,
-        lockedUntil: shouldLock ? new Date(Date.now() + this.LOCKOUT_DURATION) : null
-      }
+        lockedUntil: shouldLock
+          ? new Date(Date.now() + this.LOCKOUT_DURATION)
+          : null,
+      },
     })
 
     if (shouldLock) {
-      this.fastify.log.warn({
-        userId,
-        loginAttempts: newAttempts
-      }, 'Account locked due to too many failed login attempts')
+      this.fastify.log.warn(
+        {
+          userId,
+          loginAttempts: newAttempts,
+        },
+        'Account locked due to too many failed login attempts'
+      )
     }
   }
 
@@ -375,8 +473,8 @@ export class AuthService {
       where: { id: userId },
       data: {
         loginAttempts: 0,
-        lockedUntil: null
-      }
+        lockedUntil: null,
+      },
     })
   }
 
@@ -384,7 +482,15 @@ export class AuthService {
     return `session_${Date.now()}_${Math.random().toString(36).substring(2)}`
   }
 
-  private sanitizeUser(user: User & { readonly profile?: { readonly firstName: string; readonly lastName: string; readonly phone?: string | null } | null }): {
+  private sanitizeUser(
+    user: User & {
+      readonly profile?: {
+        readonly firstName: string
+        readonly lastName: string
+        readonly phone?: string | null
+      } | null
+    }
+  ): {
     readonly id: string
     readonly email: string
     readonly role: string
@@ -398,11 +504,13 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
-      profile: user.profile ? {
-        firstName: user.profile.firstName,
-        lastName: user.profile.lastName,
-        phone: user.profile.phone
-      } : undefined
+      profile: user.profile
+        ? {
+            firstName: user.profile.firstName,
+            lastName: user.profile.lastName,
+            phone: user.profile.phone,
+          }
+        : undefined,
     }
   }
 }

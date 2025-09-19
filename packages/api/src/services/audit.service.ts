@@ -36,7 +36,10 @@ export interface AuditStatistics {
   readonly eventsByAction: Record<string, number>
   readonly eventsByEntityType: Record<string, number>
   readonly eventsByDataClassification: Record<string, number>
-  readonly topUsers: ReadonlyArray<{ readonly userId: string; readonly eventCount: number }>
+  readonly topUsers: ReadonlyArray<{
+    readonly userId: string
+    readonly eventCount: number
+  }>
   readonly recentActivity: readonly AuditLogEntry[]
 }
 
@@ -69,29 +72,34 @@ export class AuditService {
           reason: entry.reason,
           approvalRequired: entry.approvalRequired || false,
           approvedBy: entry.approvedBy,
-          dataAccessed: entry.dataAccessed
-        }
+          dataAccessed: entry.dataAccessed,
+        },
       })
 
       // Log to application logger for real-time monitoring
-      this.fastify.log.info({
-        auditEvent: {
-          userId: entry.userId,
-          entityType: entry.entityType,
-          entityId: entry.entityId,
-          action: entry.action,
-          dataClassification: entry.dataAccessed,
-          timestamp: new Date().toISOString()
-        }
-      }, 'Audit event logged')
-
+      this.fastify.log.info(
+        {
+          auditEvent: {
+            userId: entry.userId,
+            entityType: entry.entityType,
+            entityId: entry.entityId,
+            action: entry.action,
+            dataClassification: entry.dataAccessed,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        'Audit event logged'
+      )
     } catch (error) {
       // Critical: If audit logging fails, we must log this error but not throw
       // to avoid breaking the main application flow
-      this.fastify.log.error({
-        error,
-        auditEntry: entry
-      }, 'CRITICAL: Audit logging failed')
+      this.fastify.log.error(
+        {
+          error,
+          auditEntry: entry,
+        },
+        'CRITICAL: Audit logging failed'
+      )
 
       // In a production system, you might want to:
       // 1. Send an alert to security team
@@ -114,12 +122,12 @@ export class AuditService {
       action: action.startsWith('LOGIN') ? 'CREATE' : 'DELETE',
       newValues: {
         authAction: action,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       ipAddress,
       userAgent,
       reason,
-      dataAccessed: 'PII'
+      dataAccessed: 'PII',
     })
   }
 
@@ -139,25 +147,28 @@ export class AuditService {
         violationType: 'UNAUTHORIZED_ACCESS',
         permission,
         endpoint,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       ipAddress,
       userAgent,
       endpoint,
-      dataAccessed: 'INTERNAL'
+      dataAccessed: 'INTERNAL',
     })
 
     // Log security event at higher level
-    this.fastify.log.warn({
-      securityEvent: {
-        type: 'UNAUTHORIZED_ACCESS',
-        userId,
-        permission,
-        endpoint,
-        ipAddress,
-        userAgent
-      }
-    }, 'Security violation: Unauthorized access attempt')
+    this.fastify.log.warn(
+      {
+        securityEvent: {
+          type: 'UNAUTHORIZED_ACCESS',
+          userId,
+          permission,
+          endpoint,
+          ipAddress,
+          userAgent,
+        },
+      },
+      'Security violation: Unauthorized access attempt'
+    )
   }
 
   async logDataAccess(
@@ -179,7 +190,7 @@ export class AuditService {
         reason,
         ipAddress,
         userAgent,
-        dataAccessed: dataClassification
+        dataAccessed: dataClassification,
       })
     }
   }
@@ -200,7 +211,7 @@ export class AuditService {
       entityId,
       action: 'CREATE',
       newValues: sanitizedData,
-      dataAccessed: dataClassification
+      dataAccessed: dataClassification,
     })
   }
 
@@ -223,7 +234,7 @@ export class AuditService {
       action: 'UPDATE',
       oldValues: sanitizedOldData,
       newValues: sanitizedNewData,
-      dataAccessed: dataClassification
+      dataAccessed: dataClassification,
     })
   }
 
@@ -244,7 +255,7 @@ export class AuditService {
       action: 'DELETE',
       oldValues: sanitizedOldData,
       reason,
-      dataAccessed: dataClassification
+      dataAccessed: dataClassification,
     })
   }
 
@@ -254,49 +265,8 @@ export class AuditService {
     readonly page: number
     readonly limit: number
   }> {
-    const {
-      userId,
-      entityType,
-      entityId,
-      action,
-      dateFrom,
-      dateTo,
-      dataClassification,
-      page = 1,
-      limit = 50
-    } = query
-
-    const where: Record<string, unknown> = {}
-
-    if (userId) {
-      where.userId = userId
-    }
-
-    if (entityType) {
-      where.entityType = entityType
-    }
-
-    if (entityId) {
-      where.entityId = entityId
-    }
-
-    if (action) {
-      where.action = action
-    }
-
-    if (dataClassification) {
-      where.dataAccessed = dataClassification
-    }
-
-    if (dateFrom || dateTo) {
-      where.createdAt = {}
-      if (dateFrom) {
-        where.createdAt.gte = dateFrom
-      }
-      if (dateTo) {
-        where.createdAt.lte = dateTo
-      }
-    }
+    const { page = 1, limit = 50 } = query
+    const where = this.buildAuditLogQuery(query)
 
     const skip = (page - 1) * limit
 
@@ -314,37 +284,37 @@ export class AuditService {
               profile: {
                 select: {
                   firstName: true,
-                  lastName: true
-                }
-              }
-            }
-          }
-        }
+                  lastName: true,
+                },
+              },
+            },
+          },
+        },
       }),
-      this.prisma.auditLog.count({ where })
+      this.prisma.auditLog.count({ where }),
     ])
 
     return {
-      data: auditLogs.map(log => ({
-        userId: log.userId || undefined,
+      data: auditLogs.map((log) => ({
+        userId: log.userId ?? '',
         entityType: log.entityType,
         entityId: log.entityId,
         action: log.action as AuditLogEntry['action'],
-        oldValues: log.oldValues as Record<string, unknown> || undefined,
-        newValues: log.newValues as Record<string, unknown> || undefined,
-        ipAddress: log.ipAddress || undefined,
-        userAgent: log.userAgent || undefined,
-        sessionId: log.sessionId || undefined,
-        requestId: log.requestId || undefined,
-        endpoint: log.endpoint || undefined,
-        reason: log.reason || undefined,
+        oldValues: (log.oldValues as Record<string, unknown>) ?? {},
+        newValues: (log.newValues as Record<string, unknown>) ?? {},
+        ipAddress: log.ipAddress ?? '',
+        userAgent: log.userAgent ?? '',
+        sessionId: log.sessionId ?? '',
+        requestId: log.requestId ?? '',
+        endpoint: log.endpoint ?? '',
+        reason: log.reason ?? '',
         approvalRequired: log.approvalRequired,
-        approvedBy: log.approvedBy || undefined,
-        dataAccessed: log.dataAccessed as DataClassification || undefined
+        approvedBy: log.approvedBy ?? '',
+        dataAccessed: log.dataAccessed as DataClassification,
       })),
       total,
       page,
-      limit
+      limit,
     }
   }
 
@@ -355,12 +325,12 @@ export class AuditService {
     const where: Record<string, unknown> = {}
 
     if (dateFrom || dateTo) {
-      where.createdAt = {}
+      where['createdAt'] = {}
       if (dateFrom) {
-        where.createdAt.gte = dateFrom
+        ;(where['createdAt'] as Record<string, unknown>).gte = dateFrom
       }
       if (dateTo) {
-        where.createdAt.lte = dateTo
+        ;(where['createdAt'] as Record<string, unknown>).lte = dateTo
       }
     }
 
@@ -370,7 +340,7 @@ export class AuditService {
       eventsByEntityType,
       eventsByDataClassification,
       topUsers,
-      recentActivity
+      recentActivity,
     ] = await Promise.all([
       // Total events
       this.prisma.auditLog.count({ where }),
@@ -379,14 +349,14 @@ export class AuditService {
       this.prisma.auditLog.groupBy({
         by: ['action'],
         where,
-        _count: true
+        _count: true,
       }),
 
       // Events by entity type
       this.prisma.auditLog.groupBy({
         by: ['entityType'],
         where,
-        _count: true
+        _count: true,
       }),
 
       // Events by data classification
@@ -394,9 +364,9 @@ export class AuditService {
         by: ['dataAccessed'],
         where: {
           ...where,
-          dataAccessed: { not: null }
+          dataAccessed: { not: null },
         },
-        _count: true
+        _count: true,
       }),
 
       // Top users by activity
@@ -404,15 +374,15 @@ export class AuditService {
         by: ['userId'],
         where: {
           ...where,
-          userId: { not: null }
+          userId: { not: null },
         },
         _count: true,
         orderBy: {
           _count: {
-            userId: 'desc'
-          }
+            userId: 'desc',
+          },
         },
-        take: 10
+        take: 10,
       }),
 
       // Recent activity
@@ -424,42 +394,44 @@ export class AuditService {
           user: {
             select: {
               email: true,
-              role: true
-            }
-          }
-        }
-      })
+              role: true,
+            },
+          },
+        },
+      }),
     ])
 
     return {
       totalEvents,
       eventsByAction: Object.fromEntries(
-        eventsByAction.map(item => [item.action, item._count])
+        eventsByAction.map((item) => [item.action, item._count])
       ),
       eventsByEntityType: Object.fromEntries(
-        eventsByEntityType.map(item => [item.entityType, item._count])
+        eventsByEntityType.map((item) => [item.entityType, item._count])
       ),
       eventsByDataClassification: Object.fromEntries(
-        eventsByDataClassification.map(item => [
+        eventsByDataClassification.map((item) => [
           item.dataAccessed || 'UNCLASSIFIED',
-          item._count
+          item._count,
         ])
       ),
-      topUsers: topUsers.map(item => ({
+      topUsers: topUsers.map((item) => ({
         userId: item.userId || 'UNKNOWN',
-        eventCount: item._count
+        eventCount: item._count,
       })),
-      recentActivity: recentActivity.map(log => ({
-        userId: log.userId || undefined,
+      recentActivity: recentActivity.map((log) => ({
+        userId: log.userId ?? '',
         entityType: log.entityType,
         entityId: log.entityId,
         action: log.action as AuditLogEntry['action'],
-        dataAccessed: log.dataAccessed as DataClassification || undefined
-      }))
+        dataAccessed: log.dataAccessed as DataClassification,
+      })),
     }
   }
 
-  private sanitizeAuditData(data: Record<string, unknown>): Record<string, unknown> {
+  private sanitizeAuditData(
+    data: Record<string, unknown>
+  ): Record<string, unknown> {
     const sensitiveFields = [
       'password',
       'token',
@@ -468,18 +440,22 @@ export class AuditService {
       'ssn',
       'socialSecurityNumber',
       'creditCard',
-      'bankAccount'
+      'bankAccount',
     ]
 
     const sanitized = { ...data }
 
     for (const [key, value] of Object.entries(sanitized)) {
-      if (sensitiveFields.some(field =>
-        key.toLowerCase().includes(field.toLowerCase())
-      )) {
-        sanitized[key] = '[REDACTED]'
+      if (
+        sensitiveFields.some((field) =>
+          key.toLowerCase().includes(field.toLowerCase())
+        )
+      ) {
+        Object.assign(sanitized, { [key]: '[REDACTED]' })
       } else if (typeof value === 'object' && value !== null) {
-        sanitized[key] = this.sanitizeAuditData(value as Record<string, unknown>)
+        Object.assign(sanitized, {
+          [key]: this.sanitizeAuditData(value as Record<string, unknown>),
+        })
       }
     }
 
@@ -499,7 +475,7 @@ export class AuditService {
     }) => {
       await this.logEvent({
         ...context,
-        dataAccessed: this.inferDataClassification(context.entityType)
+        dataAccessed: this.inferDataClassification(context.entityType),
       })
     }
   }
@@ -522,5 +498,51 @@ export class AuditService {
 
     // Default to internal
     return 'INTERNAL'
+  }
+
+  private buildAuditLogQuery(query: AuditQuery): Record<string, unknown> {
+    const {
+      userId,
+      entityType,
+      entityId,
+      action,
+      dateFrom,
+      dateTo,
+      dataClassification,
+    } = query
+
+    const where: Record<string, unknown> = {}
+
+    if (userId) {
+      where.userId = userId
+    }
+
+    if (entityType) {
+      where.entityType = entityType
+    }
+
+    if (entityId) {
+      where.entityId = entityId
+    }
+
+    if (action) {
+      where['action'] = action
+    }
+
+    if (dataClassification) {
+      where['dataAccessed'] = dataClassification
+    }
+
+    if (dateFrom || dateTo) {
+      where['createdAt'] = {}
+      if (dateFrom) {
+        ;(where['createdAt'] as Record<string, unknown>).gte = dateFrom
+      }
+      if (dateTo) {
+        ;(where['createdAt'] as Record<string, unknown>).lte = dateTo
+      }
+    }
+
+    return where
   }
 }
