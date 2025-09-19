@@ -10,6 +10,7 @@ import sensible from '@fastify/sensible'
 import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
 import { type FastifyPluginAsync } from 'fastify'
+import { validatorCompiler, serializerCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -62,6 +63,10 @@ export const app: FastifyPluginAsync = async (fastify, opts) => {
 
   await fastify.register(env, envConfig)
 
+  // Configure Zod type provider
+  fastify.setValidatorCompiler(validatorCompiler)
+  fastify.setSerializerCompiler(serializerCompiler)
+
   // Security plugins
   await fastify.register(helmet, {
     contentSecurityPolicy: process.env['NODE_ENV'] === 'production',
@@ -97,6 +102,7 @@ export const app: FastifyPluginAsync = async (fastify, opts) => {
         { name: 'budgets', description: 'Budget management' },
       ],
     },
+    transform: jsonSchemaTransform,
   })
 
   await fastify.register(swaggerUI, {

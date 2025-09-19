@@ -14,7 +14,7 @@ import {
 import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
 
 // Helper function to validate user access permissions
-const validateUserAccess = (currentUser: NonNullable<FastifyRequest['user']>, targetUserId: string): void => {
+const validateUserAccess = (currentUser: NonNullable<FastifyRequest['user']>, targetUserId: string): undefined => {
   const hasAdminPrivileges = ['ADMIN', 'SUPERVISOR'].includes(currentUser.role)
   const isAccessingOwnData = currentUser.id === targetUserId
 

@@ -1,6 +1,25 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+set -e  # Exit on any error
+
+echo "🚀 Running pre-commit validation..."
+
+# Node.js version validation
+echo "🔍 Validating Node.js version..."
+REQUIRED_NODE_VERSION=$(cat .nvmrc)
+CURRENT_NODE_VERSION=$(node --version | sed 's/v//')
+
+if [ "$CURRENT_NODE_VERSION" != "$REQUIRED_NODE_VERSION" ]; then
+  echo "❌ Node.js version mismatch!"
+  echo "   Required: $REQUIRED_NODE_VERSION"
+  echo "   Current:  $CURRENT_NODE_VERSION"
+  echo "💡 Run: nvm use $REQUIRED_NODE_VERSION"
+  exit 1
+fi
+
+echo "✅ Node.js version matches ($CURRENT_NODE_VERSION)"
+
 # Pre-commit lockfile validation
 echo "🔍 Validating pnpm lockfile..."
 
@@ -13,5 +32,18 @@ fi
 
 echo "✅ Lockfile validation passed"
 
+# TypeScript type checking
+echo "🔍 Running TypeScript type checking..."
+if ! pnpm typecheck 2>/dev/null; then
+  echo "❌ TypeScript type checking failed!"
+  echo "💡 Fix type errors before committing."
+  exit 1
+fi
+
+echo "✅ TypeScript type checking passed"
+
 # Run lint-staged for code quality
+echo "🎨 Running code quality checks..."
 npx lint-staged
+
+echo "🎉 All pre-commit checks passed!"

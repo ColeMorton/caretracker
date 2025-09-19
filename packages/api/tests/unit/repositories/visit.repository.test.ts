@@ -31,6 +31,20 @@ const createTransactionMock = (operations: Record<string, any> = {}) => {
       groupBy: vi.fn(),
       aggregate: vi.fn(),
       ...operations.visit
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
+      ...operations.user
+    },
+    carePlan: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
+      ...operations.carePlan
     }
   }
 
@@ -114,6 +128,14 @@ describe('VisitRepository', () => {
           findUnique: vi.fn(),
           findFirst: vi.fn(),
           update: vi.fn()
+        },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: clientId,
+            role: 'CLIENT',
+            isActive: true,
+            deletedAt: null
+          })
         }
       })
 
@@ -156,7 +178,7 @@ describe('VisitRepository', () => {
         }
       })
 
-      const result = await repository.checkin(visitId, workerId, checkinData)
+      const result = await repository.checkin(visitId, workerId, checkinData, userId)
 
       expect(mockTx.visit.findUnique).toHaveBeenCalledWith({
         where: { id: visitId, deletedAt: null },
@@ -210,7 +232,7 @@ describe('VisitRepository', () => {
         }
       })
 
-      const result = await repository.checkout(visitId, workerId, checkoutData)
+      const result = await repository.checkout(visitId, workerId, checkoutData, userId)
 
       expect(mockTx.visit.findUnique).toHaveBeenCalledWith({
         where: { id: visitId, deletedAt: null }
@@ -240,29 +262,17 @@ describe('VisitRepository', () => {
 
       const mockTx = createTransactionMock({
         visit: {
-          findUnique: vi.fn(),
-          findFirst: vi.fn().mockResolvedValue(originalVisit),
+          findUnique: vi.fn().mockResolvedValue(originalVisit),
+          findFirst: vi.fn(),
           update: vi.fn().mockResolvedValue(rescheduledVisit),
           create: vi.fn()
         }
       })
 
-      const result = await repository.reschedule(visitId, newScheduledAt, userId, reason)
+      const result = await repository.reschedule(visitId, newScheduledAt, new Date('2024-01-02T12:00:00Z'), reason, userId)
 
-      expect(mockTx.visit.findFirst).toHaveBeenCalledWith({
-        where: { id: visitId, deletedAt: null },
-        include: {
-          client: {
-            include: {
-              profile: true
-            }
-          },
-          worker: {
-            include: {
-              profile: true
-            }
-          }
-        }
+      expect(mockTx.visit.findUnique).toHaveBeenCalledWith({
+        where: { id: visitId, deletedAt: null }
       })
       expect(result).toEqual(rescheduledVisit)
     })
@@ -294,7 +304,7 @@ describe('VisitRepository', () => {
 
       const result = await repository.getStatistics(dateFrom, dateTo)
 
-      expect(mockPrisma.visit.count).toHaveBeenCalledTimes(3)
+      expect(mockPrisma.visit.count).toHaveBeenCalledTimes(5)
       expect(result).toHaveProperty('totalVisits')
       expect(result).toHaveProperty('completedVisits')
       expect(result).toHaveProperty('cancelledVisits')

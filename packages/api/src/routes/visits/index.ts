@@ -17,7 +17,7 @@ import {
 import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
 
 // Helper function to validate visit access permissions
-const validateVisitAccess = (user: NonNullable<FastifyRequest['user']>, visit: Record<string, unknown>): void => {
+const validateVisitAccess = (user: NonNullable<FastifyRequest['user']>, visit: Record<string, unknown>): undefined => {
   const hasAdminPrivileges = ['ADMIN', 'SUPERVISOR'].includes(user.role)
   const isClientOwner = visit.clientId === user.id
   const isAssignedWorker = visit.workerId === user.id
