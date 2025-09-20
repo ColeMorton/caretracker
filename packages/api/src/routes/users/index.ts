@@ -1,6 +1,7 @@
 import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
+import type { Profile } from '@caretracker/database'
 
-import { UserRepository, type UserFilters } from '../../repositories/user.repository.js'
+import { UserRepository, type UserFilters, type UpdateUserData, type UserWithProfile } from '../../repositories/user.repository.js'
 import {
   getUsersQuerySchema,
   getUsersResponseSchema,
@@ -28,7 +29,7 @@ const validateUserAccess = (currentUser: NonNullable<FastifyRequest['user']>, ta
 const getOptionalField = (value: unknown): unknown => value || undefined
 
 // Helper function to format profile data
-const formatProfileData = (profile: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined => {
+const formatProfileData = (profile: Profile | null | undefined): Record<string, unknown> | undefined => {
   if (!profile) return undefined
 
   return {
@@ -44,7 +45,7 @@ const formatProfileData = (profile: Record<string, unknown> | null | undefined):
     state: getOptionalField(profile.state),
     zipCode: getOptionalField(profile.zipCode),
     country: getOptionalField(profile.country),
-    dateOfBirth: profile.dateOfBirth ? new Date(profile.dateOfBirth as string).toISOString() : undefined,
+    dateOfBirth: profile.dateOfBirth ? profile.dateOfBirth.toISOString() : undefined,
     gender: getOptionalField(profile.gender),
     preferredLanguage: getOptionalField(profile.preferredLanguage),
     timezone: getOptionalField(profile.timezone),
@@ -53,16 +54,16 @@ const formatProfileData = (profile: Record<string, unknown> | null | undefined):
 }
 
 // Helper function to format user response
-const formatUserResponse = (user: Record<string, unknown>): Record<string, unknown> => ({
+const formatUserResponse = (user: UserWithProfile): Record<string, unknown> => ({
   id: user.id,
   email: user.email,
   role: user.role,
   isActive: user.isActive,
   emailVerified: user.emailVerified,
-  lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt as string).toISOString() : null,
-  createdAt: new Date(user.createdAt as string).toISOString(),
-  updatedAt: new Date(user.updatedAt as string).toISOString(),
-  profile: formatProfileData(user['profile'] as Record<string, unknown> | null | undefined)
+  lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+  createdAt: user.createdAt.toISOString(),
+  updatedAt: user.updatedAt.toISOString(),
+  profile: formatProfileData(user.profile)
 })
 
 const users: FastifyPluginAsync = async (fastify, _opts) => {
@@ -164,7 +165,7 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
 
     return reply.status(200).send({
       success: true,
-      data: formatUserResponse(user as any)
+      data: formatUserResponse(user)
     })
   })
 
@@ -238,7 +239,7 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
     }
 
     // Clean undefined values from update data
-    const updateData: any = {
+    const updateData: UpdateUserData = {
       ...(rawUpdateData.email && { email: rawUpdateData.email }),
       ...(rawUpdateData.role && { role: rawUpdateData.role }),
       ...(typeof rawUpdateData.isActive === 'boolean' && { isActive: rawUpdateData.isActive }),

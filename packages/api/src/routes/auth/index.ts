@@ -136,8 +136,8 @@ const auth: FastifyPluginAsync = async (fastify, _opts) => {
             create: {
               firstName: userData.profile.firstName,
               lastName: userData.profile.lastName,
-              phone: userData.profile.phone,
-              dateOfBirth: userData.profile.dateOfBirth ? new Date(userData.profile.dateOfBirth) : undefined
+              ...(userData.profile.phone && { phone: userData.profile.phone }),
+              ...(userData.profile.dateOfBirth && { dateOfBirth: new Date(userData.profile.dateOfBirth) })
             }
           }
         },

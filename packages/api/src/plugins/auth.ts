@@ -38,7 +38,7 @@ declare module '@fastify/jwt' {
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   // Register JWT plugin with proper typing
-  await fastify.register(fastifyJwt as any, {
+  await fastify.register(fastifyJwt, {
     secret: process.env['JWT_SECRET'] || 'fallback-secret-for-development',
     sign: {
       algorithm: 'HS256',

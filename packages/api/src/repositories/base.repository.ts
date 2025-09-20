@@ -366,7 +366,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
           action: 'DELETE'
           entityType: string
           entityId: string
-          oldValues: any
+          oldValues: Record<string, unknown>
           reason?: string
         } = {
           userId,
@@ -434,7 +434,7 @@ export abstract class BaseRepository<T extends AuditableEntity> {
     callback: (tx: PrismaTransactionClient) => Promise<R>
   ): Promise<R> {
     try {
-      return await this.prisma.$transaction(callback as any)
+      return await this.prisma.$transaction(callback)
     } catch (error) {
       // Re-throw business logic errors unchanged
       if (error instanceof NotFoundError ||

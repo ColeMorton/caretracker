@@ -316,7 +316,7 @@ export class AuthService {
     readonly permissions: readonly string[]
     readonly sessionId: string
   }): Promise<string> {
-    return await this.fastify.jwt.sign(payload as any, {
+    return await this.fastify.jwt.sign(payload, {
       expiresIn: this.ACCESS_TOKEN_EXPIRY,
     })
   }
@@ -326,7 +326,7 @@ export class AuthService {
       userId,
       type: 'refresh'
     }
-    const token = await this.fastify.jwt.sign(payload as any, {
+    const token = await this.fastify.jwt.sign(payload, {
       expiresIn: this.REFRESH_TOKEN_EXPIRY,
     })
 

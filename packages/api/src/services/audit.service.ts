@@ -1,5 +1,6 @@
 import type { PrismaClient, DataClassification } from '@caretracker/database'
 import type { FastifyInstance } from 'fastify'
+import { filterUndefinedValues } from '../utils/prisma-types.js'
 
 export interface AuditLogEntry {
   readonly userId?: string
@@ -56,25 +57,23 @@ export class AuditService {
         return
       }
 
-      const auditData: any = {
+      const auditData = filterUndefinedValues({
         userId: entry.userId,
         entityType: entry.entityType,
         entityId: entry.entityId,
         action: entry.action,
         approvalRequired: entry.approvalRequired || false,
-      }
-
-      // Only include optional fields if they have values
-      if (entry.oldValues) auditData.oldValues = entry.oldValues
-      if (entry.newValues) auditData.newValues = entry.newValues
-      if (entry.ipAddress) auditData.ipAddress = entry.ipAddress
-      if (entry.userAgent) auditData.userAgent = entry.userAgent
-      if (entry.sessionId) auditData.sessionId = entry.sessionId
-      if (entry.requestId) auditData.requestId = entry.requestId
-      if (entry.endpoint) auditData.endpoint = entry.endpoint
-      if (entry.reason) auditData.reason = entry.reason
-      if (entry.approvedBy) auditData.approvedBy = entry.approvedBy
-      if (entry.dataAccessed) auditData.dataAccessed = entry.dataAccessed
+        oldValues: entry.oldValues,
+        newValues: entry.newValues,
+        ipAddress: entry.ipAddress,
+        userAgent: entry.userAgent,
+        sessionId: entry.sessionId,
+        requestId: entry.requestId,
+        endpoint: entry.endpoint,
+        reason: entry.reason,
+        approvedBy: entry.approvedBy,
+        dataAccessed: entry.dataAccessed,
+      })
 
       await this.prisma.auditLog.create({
         data: auditData,

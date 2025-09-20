@@ -5,8 +5,8 @@ export { PrismaClient, Prisma } from '@prisma/client'
 export type { User, Profile, Visit, CarePlan, Budget } from '@prisma/client'
 
 // Export transaction client type
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient, Prisma } from '@prisma/client'
 export type PrismaTransactionClient = Omit<
   PrismaClient,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >

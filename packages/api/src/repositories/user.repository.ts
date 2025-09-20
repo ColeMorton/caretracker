@@ -1,6 +1,7 @@
 import type { User, Profile, PrismaClient } from '@caretracker/database'
 
 import { NotFoundError, ConflictError } from '../utils/errors.js'
+import { filterUndefinedValues, makeMutable } from '../utils/prisma-types.js'
 
 import type { AuditContext, PaginatedResult } from './base.repository.js';
 import { BaseRepository } from './base.repository.js'
@@ -235,8 +236,26 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
       const profile = data.profile ? await tx['profile'].create({
         data: {
           userId: user.id,
-          ...data.profile,
-          dateOfBirth: data.profile.dateOfBirth || undefined,
+          firstName: data.profile.firstName,
+          lastName: data.profile.lastName,
+          ...(data.profile.middleName && { middleName: data.profile.middleName }),
+          ...(data.profile.preferredName && { preferredName: data.profile.preferredName }),
+          ...(data.profile.phone && { phone: data.profile.phone }),
+          ...(data.profile.alternatePhone && { alternatePhone: data.profile.alternatePhone }),
+          ...(data.profile.email && { email: data.profile.email }),
+          ...(data.profile.streetAddress && { streetAddress: data.profile.streetAddress }),
+          ...(data.profile.city && { city: data.profile.city }),
+          ...(data.profile.state && { state: data.profile.state }),
+          ...(data.profile.zipCode && { zipCode: data.profile.zipCode }),
+          ...(data.profile.country && { country: data.profile.country }),
+          ...(data.profile.dateOfBirth && { dateOfBirth: data.profile.dateOfBirth }),
+          ...(data.profile.gender && { gender: data.profile.gender }),
+          ...(data.profile.preferredLanguage && { preferredLanguage: data.profile.preferredLanguage }),
+          ...(data.profile.timezone && { timezone: data.profile.timezone }),
+          ...(data.profile.photoUrl && { photoUrl: data.profile.photoUrl }),
+          ...(data.profile.allergies && { allergies: makeMutable(data.profile.allergies) }),
+          ...(data.profile.medications && { medications: makeMutable(data.profile.medications) }),
+          ...(data.profile.medicalConditions && { medicalConditions: makeMutable(data.profile.medicalConditions) }),
           createdBy: createdByUserId,
           updatedBy: createdByUserId,
           version: 1
@@ -291,7 +310,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
           id,
           version: currentUser.version
         },
-        data: {
+        data: filterUndefinedValues({
           email: data.email,
           role: data.role,
           isActive: data.isActive,
@@ -300,7 +319,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
           updatedBy: updatedByUserId,
           version: currentUser.version + 1,
           updatedAt: new Date()
-        }
+        })
       })
 
       // Update profile if provided and exists
@@ -309,7 +328,26 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
           return await tx['profile'].update({
             where: { userId: id },
             data: {
-              ...data.profile,
+              ...(data.profile.firstName && { firstName: data.profile.firstName }),
+              ...(data.profile.lastName && { lastName: data.profile.lastName }),
+              ...(data.profile.middleName && { middleName: data.profile.middleName }),
+              ...(data.profile.preferredName && { preferredName: data.profile.preferredName }),
+              ...(data.profile.phone && { phone: data.profile.phone }),
+              ...(data.profile.alternatePhone && { alternatePhone: data.profile.alternatePhone }),
+              ...(data.profile.email && { email: data.profile.email }),
+              ...(data.profile.streetAddress && { streetAddress: data.profile.streetAddress }),
+              ...(data.profile.city && { city: data.profile.city }),
+              ...(data.profile.state && { state: data.profile.state }),
+              ...(data.profile.zipCode && { zipCode: data.profile.zipCode }),
+              ...(data.profile.country && { country: data.profile.country }),
+              ...(data.profile.dateOfBirth && { dateOfBirth: data.profile.dateOfBirth }),
+              ...(data.profile.gender && { gender: data.profile.gender }),
+              ...(data.profile.preferredLanguage && { preferredLanguage: data.profile.preferredLanguage }),
+              ...(data.profile.timezone && { timezone: data.profile.timezone }),
+              ...(data.profile.photoUrl && { photoUrl: data.profile.photoUrl }),
+              ...(data.profile.allergies && { allergies: makeMutable(data.profile.allergies) }),
+              ...(data.profile.medications && { medications: makeMutable(data.profile.medications) }),
+              ...(data.profile.medicalConditions && { medicalConditions: makeMutable(data.profile.medicalConditions) }),
               updatedBy: updatedByUserId,
               version: currentUser.profile.version + 1,
               updatedAt: new Date()
@@ -320,7 +358,26 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
           return await tx['profile'].create({
             data: {
               userId: id,
-              ...data.profile,
+              firstName: data.profile.firstName || '',
+              lastName: data.profile.lastName || '',
+              ...(data.profile.middleName && { middleName: data.profile.middleName }),
+              ...(data.profile.preferredName && { preferredName: data.profile.preferredName }),
+              ...(data.profile.phone && { phone: data.profile.phone }),
+              ...(data.profile.alternatePhone && { alternatePhone: data.profile.alternatePhone }),
+              ...(data.profile.email && { email: data.profile.email }),
+              ...(data.profile.streetAddress && { streetAddress: data.profile.streetAddress }),
+              ...(data.profile.city && { city: data.profile.city }),
+              ...(data.profile.state && { state: data.profile.state }),
+              ...(data.profile.zipCode && { zipCode: data.profile.zipCode }),
+              ...(data.profile.country && { country: data.profile.country }),
+              ...(data.profile.dateOfBirth && { dateOfBirth: data.profile.dateOfBirth }),
+              ...(data.profile.gender && { gender: data.profile.gender }),
+              ...(data.profile.preferredLanguage && { preferredLanguage: data.profile.preferredLanguage }),
+              ...(data.profile.timezone && { timezone: data.profile.timezone }),
+              ...(data.profile.photoUrl && { photoUrl: data.profile.photoUrl }),
+              ...(data.profile.allergies && { allergies: makeMutable(data.profile.allergies) }),
+              ...(data.profile.medications && { medications: makeMutable(data.profile.medications) }),
+              ...(data.profile.medicalConditions && { medicalConditions: makeMutable(data.profile.medicalConditions) }),
               createdBy: updatedByUserId,
               updatedBy: updatedByUserId,
               version: 1

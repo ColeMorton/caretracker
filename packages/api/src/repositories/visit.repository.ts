@@ -1,6 +1,7 @@
 import type { Visit, User, CarePlan, PrismaClient, VisitStatus } from '@caretracker/database'
 
 import { NotFoundError, BusinessRuleError, ConflictError } from '../utils/errors.js'
+import { filterUndefinedValues, makeMutable } from '../utils/prisma-types.js'
 
 import type { AuditContext, PaginatedResult, CreateInput, PrismaTransactionClient } from './base.repository.js';
 import { BaseRepository } from './base.repository.js'
@@ -370,7 +371,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       // Update visit with check-in data
       const updatedVisit = await tx['visit'].update({
         where: { id: visitId, version: visit.version },
-        data: {
+        data: filterUndefinedValues({
           status: 'IN_PROGRESS',
           actualStartAt: new Date(),
           location: data.location || visit.location,
@@ -378,7 +379,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
           updatedBy: userId,
           version: visit.version + 1,
           updatedAt: new Date()
-        },
+        }),
         include: {
           client: {
             include: {
@@ -462,20 +463,20 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       // Update visit with checkout data
       const updatedVisit = await tx['visit'].update({
         where: { id: visitId, version: visit.version },
-        data: {
+        data: filterUndefinedValues({
           status: 'COMPLETED',
           actualEndAt,
           actualDuration,
-          activities: data.activities,
+          activities: makeMutable(data.activities),
           notes: data.notes,
           vitals: data.vitals,
-          medications: data.medications || [],
+          medications: data.medications ? makeMutable(data.medications) : [],
           workerNotes: [visit.workerNotes, data.notes].filter(Boolean).join('\n\n'),
           documentationComplete: true,
           updatedBy: userId,
           version: visit.version + 1,
           updatedAt: new Date()
-        },
+        }),
         include: {
           client: {
             include: {

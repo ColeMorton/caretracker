@@ -42,8 +42,18 @@ fi
 
 echo "✅ TypeScript type checking passed"
 
-# Run lint-staged for code quality
-echo "🎨 Running code quality checks..."
+# ESLint validation (full codebase - matches CI)
+echo "🔍 Running ESLint validation (full codebase)..."
+if ! pnpm lint 2>/dev/null; then
+  echo "❌ ESLint validation failed!"
+  echo "💡 Fix ESLint errors before committing."
+  exit 1
+fi
+
+echo "✅ ESLint validation passed"
+
+# Run lint-staged for code formatting
+echo "🎨 Running code formatting..."
 npx lint-staged
 
 echo "🎉 All pre-commit checks passed!"

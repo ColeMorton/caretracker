@@ -1,6 +1,7 @@
 import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
 
-import { VisitRepository } from '../../repositories/visit.repository.js'
+import { VisitRepository, type VisitWithRelations, type CreateVisitData, type UpdateVisitData } from '../../repositories/visit.repository.js'
+import { makeMutable } from '../../utils/prisma-types.js'
 import {
   getVisitsQuerySchema,
   getVisitsResponseSchema,
@@ -115,12 +116,12 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
 
     return reply.status(200).send({
       success: true,
-      data: result.data.map((visit: any) => ({
+      data: result.data.map((visit: VisitWithRelations) => ({
         id: visit.id,
         clientId: visit.clientId,
         workerId: visit.workerId,
         scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: (visit as any).estimatedDuration,
+        estimatedDuration: visit.duration,
         status: visit.status,
         activities: visit.activities || [],
         actualStartTime: visit.actualStartAt?.toISOString() || undefined,
@@ -169,11 +170,11 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
       throw new NotFoundError('Visit not found')
     }
 
-    validateVisitAccess(request.user!, visit as any)
+    validateVisitAccess(request.user!, visit)
 
     return reply.status(200).send({
       success: true,
-      data: formatVisitResponse(visit as any)
+      data: formatVisitResponse(visit)
     })
   })
 
@@ -198,7 +199,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     const rawVisitData = createVisitRequestSchema.parse(request.body)
 
     // Clean undefined values from visit data
-    const visitData: any = {
+    const visitData: CreateVisitData = {
       clientId: rawVisitData.clientId,
       workerId: rawVisitData.workerId,
       scheduledAt: rawVisitData.scheduledAt,
@@ -219,7 +220,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
         clientId: visit.clientId,
         workerId: visit.workerId,
         scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: (visit as any).estimatedDuration,
+        estimatedDuration: visit.duration,
         status: visit.status,
         activities: visit.activities || [],
         createdAt: visit.createdAt.toISOString()
@@ -251,15 +252,15 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
     const rawUpdateData = updateVisitRequestSchema.parse(request.body)
 
     // Clean undefined values from update data
-    const updateData: any = {
-      ...(rawUpdateData.scheduledAt && { scheduledAt: rawUpdateData.scheduledAt }),
-      ...(rawUpdateData.scheduledEndAt && { scheduledEndAt: rawUpdateData.scheduledEndAt }),
+    const updateData: UpdateVisitData = {
+      ...(rawUpdateData.scheduledAt && { scheduledAt: new Date(rawUpdateData.scheduledAt) }),
+      ...(rawUpdateData.scheduledEndAt && { scheduledEndAt: new Date(rawUpdateData.scheduledEndAt) }),
       ...(rawUpdateData.duration && { duration: rawUpdateData.duration }),
       ...(rawUpdateData.status && { status: rawUpdateData.status }),
       ...(rawUpdateData.visitType && { visitType: rawUpdateData.visitType }),
       ...(rawUpdateData.location && { location: rawUpdateData.location }),
       ...(rawUpdateData.notes && { notes: rawUpdateData.notes }),
-      ...(rawUpdateData.activities && { activities: rawUpdateData.activities }),
+      ...(rawUpdateData.activities && { activities: makeMutable(rawUpdateData.activities) }),
       ...(rawUpdateData.cancellationReason && { cancellationReason: rawUpdateData.cancellationReason }),
     }
 
@@ -272,7 +273,7 @@ const visits: FastifyPluginAsync = async (fastify, _opts) => {
         clientId: visit.clientId,
         workerId: visit.workerId,
         scheduledAt: visit.scheduledAt.toISOString(),
-        estimatedDuration: (visit as any).estimatedDuration,
+        estimatedDuration: visit.duration,
         status: visit.status,
         activities: visit.activities || [],
         updatedAt: visit.updatedAt.toISOString()
