@@ -12,15 +12,9 @@
 export function filterUndefinedValues<T extends Record<string, unknown>>(
   obj: T
 ): Record<string, unknown> {
-  const filtered: Record<string, unknown> = {}
-
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      filtered[key] = value
-    }
-  }
-
-  return filtered
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => value !== undefined)
+  )
 }
 
 /**

@@ -1,7 +1,6 @@
 import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
 
 import { VisitRepository, type VisitWithRelations, type CreateVisitData, type UpdateVisitData } from '../../repositories/visit.repository.js'
-import { makeMutable } from '../../utils/prisma-types.js'
 import {
   getVisitsQuerySchema,
   getVisitsResponseSchema,
@@ -16,6 +15,7 @@ import {
   rescheduleVisitRequestSchema
 } from '../../schemas/visits.js'
 import { NotFoundError, AuthorizationError } from '../../utils/errors.js'
+import { makeMutable } from '../../utils/prisma-types.js'
 
 // Helper function to validate visit access permissions
 const validateVisitAccess = (user: NonNullable<FastifyRequest['user']>, visit: Record<string, unknown>): undefined => {

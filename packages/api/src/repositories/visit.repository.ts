@@ -327,7 +327,7 @@ export class VisitRepository extends BaseRepository<VisitWithRelations> {
       // Log audit event
       if (this.auditLogger) {
         await this.auditLogger({
-          userId: userId,
+          userId,
           action: 'CREATE',
           entityType: this.entityName,
           entityId: visit.id,

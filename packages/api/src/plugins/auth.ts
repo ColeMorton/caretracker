@@ -31,8 +31,8 @@ declare module 'fastify' {
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: UserPayload
-    user: UserPayload
+    readonly payload: UserPayload
+    readonly user: UserPayload
   }
 }
 
@@ -57,7 +57,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('authService', authService)
 
   // Authentication hook - verifies JWT token
-  const authenticate = async (request: FastifyRequest, _reply: FastifyReply) => {
+  const authenticate = async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     try {
       const authHeader = request.headers.authorization
 
@@ -351,7 +351,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('requireOwnership', requireOwnership)
 
   // Optional authentication hook (doesn't throw if no token)
-  const optionalAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+  const optionalAuth = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
       await authenticate(request, reply)
     } catch (error) {

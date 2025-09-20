@@ -1,5 +1,6 @@
 import type { PrismaClient, DataClassification } from '@caretracker/database'
 import type { FastifyInstance } from 'fastify'
+
 import { filterUndefinedValues } from '../utils/prisma-types.js'
 
 export interface AuditLogEntry {

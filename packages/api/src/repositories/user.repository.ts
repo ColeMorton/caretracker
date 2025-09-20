@@ -521,7 +521,7 @@ export class UserRepository extends BaseRepository<UserWithProfile> {
 
   async updateLoginAttempts(userId: string, attempts: number, lockedUntil?: Date): Promise<void> {
     try {
-      const updateData: { loginAttempts: number; lockedUntil?: Date } = {
+      const updateData: { readonly loginAttempts: number; readonly lockedUntil?: Date } = {
         loginAttempts: attempts,
       }
 

@@ -1,5 +1,5 @@
-import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
 import type { Profile } from '@caretracker/database'
+import { type FastifyPluginAsync, type FastifyRequest } from 'fastify'
 
 import { UserRepository, type UserFilters, type UpdateUserData, type UserWithProfile } from '../../repositories/user.repository.js'
 import {
@@ -245,12 +245,9 @@ const users: FastifyPluginAsync = async (fastify, _opts) => {
       ...(typeof rawUpdateData.isActive === 'boolean' && { isActive: rawUpdateData.isActive }),
     }
     if (rawUpdateData.profile) {
-      updateData.profile = {}
-      Object.entries(rawUpdateData.profile).forEach(([key, value]) => {
-        if (value !== undefined) {
-          updateData.profile[key] = value
-        }
-      })
+      updateData.profile = Object.fromEntries(
+        Object.entries(rawUpdateData.profile).filter(([, value]) => value !== undefined)
+      )
     }
 
     const user = await userRepository.updateWithProfile(id, updateData, request.user!.id)

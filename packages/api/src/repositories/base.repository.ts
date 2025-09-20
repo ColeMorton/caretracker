@@ -362,12 +362,12 @@ export abstract class BaseRepository<T extends AuditableEntity> {
       // Log audit event
       if (this.auditLogger) {
         const auditData: {
-          userId: string
-          action: 'DELETE'
-          entityType: string
-          entityId: string
-          oldValues: Record<string, unknown>
-          reason?: string
+          readonly userId: string
+          readonly action: 'DELETE'
+          readonly entityType: string
+          readonly entityId: string
+          readonly oldValues: Record<string, unknown>
+          readonly reason?: string
         } = {
           userId,
           action: 'DELETE',
